@@ -33,6 +33,14 @@ export default function ChatPage() {
   const [setupUsername, setSetupUsername] = useState('')
   const [setupError, setSetupError] = useState<string | null>(null)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [dark, setDark] = useState(() => localStorage.getItem('sc-theme') === 'dark')
+  const [search, setSearch] = useState('')
+  const [notifOn, setNotifOn] = useState(typeof Notification !== 'undefined' && Notification.permission === 'granted')
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark)
+    localStorage.setItem('sc-theme', dark ? 'dark' : 'light')
+  }, [dark])
 
   useEffect(() => {
     const on = () => setIsOnline(true)
@@ -76,13 +84,11 @@ export default function ChatPage() {
     loadTitle()
   }, [activeId, refreshKey, userId])
 
-  // mark read + bump list
   useEffect(() => {
     if (!activeId || !userId) return
     supabase.from('conversation_members').update({ last_read_at: new Date().toISOString() }).eq('conversation_id', activeId).eq('user_id', userId).then(() => setRefreshKey((k) => k + 1))
   }, [activeId, userId, messages.length])
 
-  // bump list on any incoming realtime message
   useEffect(() => {
     const channel = supabase.channel('chat-page-bump').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
       setRefreshKey((k) => k + 1)
@@ -93,9 +99,6 @@ export default function ChatPage() {
     }
   }, [])
 
-  // browser notifications for incoming messages while tab hidden
-  const [notifOn, setNotifOn] = useState(typeof Notification !== 'undefined' && Notification.permission === 'granted')
-  const [search, setSearch] = useState('')
   useEffect(() => {
     if (!notifOn || !document.hidden || messages.length === 0) return
     const last = messages[messages.length - 1]
@@ -137,50 +140,71 @@ export default function ChatPage() {
     navigate('/login')
   }
 
+  // mobile: show list OR chat; desktop: both
+  const showChatOnMobile = !!activeId
+
   return (
-    <div className="h-full flex flex-col max-w-6xl mx-auto bg-white shadow">
-      <header className="flex items-center justify-between px-4 py-3 border-b bg-white">
-        <div className="flex items-center gap-2">
-          <img src="/logo.jpg" className="w-9 h-9 rounded-full object-cover" alt="logo" />
-          <h1 className="font-bold">substack <span className="text-brand-500">connect</span></h1>
+    <div className="h-dvh flex flex-col bg-[#e9e4dc] dark:bg-[#0b141a]">
+      {/* top bar */}
+      <header className="flex items-center justify-between pl-3 pr-2 py-2 bg-brand-600 text-white shadow-md z-10 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <img src="/logo.jpg" className="w-9 h-9 rounded-full object-cover bg-white" alt="logo" />
+          <h1 className="font-bold text-[17px] truncate">substack <span className="font-light">connect</span></h1>
         </div>
-        <div className="flex items-center gap-3 text-sm">
-          <button onClick={enableNotif} title="Browser notifications" className="text-lg">{notifOn ? '🔔' : '🔕'}</button>
-          <Link to="/profile" className="text-gray-600 underline">@{profile?.username ?? '…'}</Link>
-          <button onClick={logout} className="border rounded-lg px-3 py-1">Logout</button>
+        <div className="flex items-center gap-0.5 text-white">
+          <button onClick={() => setDark((d) => !d)} title="Dark mode" className="w-10 h-10 rounded-full hover:bg-white/10 text-lg">{dark ? '☀️' : '🌙'}</button>
+          <button onClick={enableNotif} title="Notifications" className="w-10 h-10 rounded-full hover:bg-white/10 text-lg">{notifOn ? '🔔' : '🔕'}</button>
+          <Link to="/profile" title="Profile" className="h-10 px-2 rounded-full hover:bg-white/10 flex items-center text-sm font-medium max-w-28 truncate">
+            @{profile?.username ?? '…'}
+          </Link>
+          <button onClick={logout} title="Logout" className="w-10 h-10 rounded-full hover:bg-white/10 text-lg">⎋</button>
         </div>
       </header>
-      {!isOnline && <div className="bg-amber-100 text-amber-900 text-xs px-4 py-2 text-center">Offline — reconnecting… messages will sync when back.</div>}
+
+      {!isOnline && <div className="bg-amber-400 text-amber-950 text-xs px-4 py-1.5 text-center font-medium shrink-0">Offline — reconnecting…</div>}
       {userId && !profile && (
-        <form onSubmit={completeProfile} className="bg-blue-50 border-b border-blue-200 px-4 py-3 flex items-center gap-2 text-sm">
-          <span>Pick a username to finish setup:</span>
-          <input className="border rounded-lg px-3 py-1" placeholder="username" value={setupUsername} onChange={(e) => setSetupUsername(e.target.value)} />
-          <button className="bg-gray-900 text-white rounded-lg px-3 py-1">Save</button>
+        <form onSubmit={completeProfile} className="bg-sky-100 dark:bg-sky-950 px-4 py-2.5 flex items-center gap-2 text-sm shrink-0">
+          <span className="dark:text-zinc-200">Pick a username:</span>
+          <input className="border rounded-full px-3 py-1 text-sm flex-1 min-w-0 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" placeholder="username" value={setupUsername} onChange={(e) => setSetupUsername(e.target.value)} />
+          <button className="bg-brand-600 text-white rounded-full px-4 py-1 font-medium shrink-0">Save</button>
           {setupError && <span className="text-red-600">{setupError}</span>}
         </form>
       )}
-      <div className="flex-1 flex min-h-0">
-        <aside className="w-80 border-r flex flex-col min-h-0">
+
+      <div className="flex-1 flex min-h-0 max-w-6xl w-full mx-auto md:p-3 md:gap-3">
+        {/* conversation list pane */}
+        <aside className={`${showChatOnMobile ? 'hidden' : 'flex'} md:flex flex-col min-h-0 flex-1 md:flex-none md:w-[340px] bg-white dark:bg-[#111b21] md:rounded-2xl md:shadow overflow-hidden`}>
           <NewChatDialog onCreated={(id) => { setActiveId(id); setRefreshKey((k) => k + 1) }} />
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto nice-scroll">
             <ConversationList selectedId={activeId} onSelect={setActiveId} refreshKey={refreshKey} />
           </div>
         </aside>
-        <main className="flex-1 flex min-h-0">
-          <div className="flex-1 flex flex-col min-h-0">
+
+        {/* chat pane */}
+        <main className={`${showChatOnMobile ? 'flex' : 'hidden'} md:flex flex-1 min-h-0 min-w-0`}>
+          <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-[#efeae2] dark:bg-[#0b141a] md:rounded-2xl md:shadow overflow-hidden">
             {!activeId ? (
-              <div className="flex-1 flex items-center justify-center text-gray-500 text-sm p-8 text-center">
-                Select a conversation or search a user to start chatting.
+              <div className="hidden md:flex flex-1 flex-col items-center justify-center text-center p-8 chat-wallpaper">
+                <img src="/logo.jpg" className="w-20 h-20 rounded-full object-cover mb-3 shadow" alt="" />
+                <p className="font-bold text-lg text-gray-700 dark:text-zinc-200">Substack Connect</p>
+                <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1 max-w-xs">Select a conversation or search a username to start messaging.</p>
               </div>
             ) : (
               <>
-                <button onClick={() => setShowInfo((s) => !s)} className="px-4 py-2 border-b text-sm text-gray-700 bg-white text-left hover:bg-gray-50">
-                  <span className="font-medium">{activeConv?.name ?? 'Direct chat'}</span>
-                  <span className="text-gray-400"> · {onlineIds.length > 0 ? `${onlineIds.length} online` : '● online'} · info ›</span>
-                  {typingUsers.length > 0 && <span className="text-brand-600"> · {typingUsers.join(', ')} typing…</span>}
+                <button onClick={() => setShowInfo((s) => !s)} className="flex items-center gap-2 px-2 py-1.5 bg-[#f0f2f5] dark:bg-[#1f2c34] text-left shrink-0">
+                  <span onClick={(e) => { e.stopPropagation(); setActiveId(null) }} className="md:hidden w-9 h-9 flex items-center justify-center text-xl text-gray-600 dark:text-zinc-300" aria-label="Back">←</span>
+                  <span className="w-10 h-10 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center font-bold shrink-0">
+                    {(activeConv?.name ?? '?').slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block font-semibold text-[15px] truncate text-gray-900 dark:text-zinc-100">{activeConv?.name ?? '…'}</span>
+                    <span className="block text-xs text-gray-500 dark:text-zinc-400 truncate">
+                      {typingUsers.length > 0 ? <span className="text-brand-600 font-medium typing-dots">{typingUsers.join(', ')} typing<span>•</span><span>•</span><span>•</span></span> : onlineIds.length > 0 ? `${onlineIds.length} online` : 'tap for info'}
+                    </span>
+                  </span>
                 </button>
-                <div className="px-4 py-1 bg-white border-b">
-                  <input className="w-full text-sm border rounded-full px-3 py-1 outline-none" placeholder="Search messages…" value={search} onChange={(e) => setSearch(e.target.value)} />
+                <div className="px-3 py-1 bg-[#f0f2f5] dark:bg-[#1f2c34] shrink-0">
+                  <input className="w-full text-sm rounded-full px-3.5 py-1.5 outline-none bg-white dark:bg-[#2a3942] dark:text-zinc-100 placeholder:text-gray-400" placeholder="🔍 Search messages…" value={search} onChange={(e) => setSearch(e.target.value)} />
                 </div>
                 <MessageList messages={visibleMessages} onLoadMore={loadMore} hasMore={hasMore && !search} loadingMore={loadingMore} replyTo={replyTo} onReply={setReplyTo} />
                 <MessageComposer conversationId={activeId} replyTo={replyTo} onReply={setReplyTo} onSent={() => setRefreshKey((k) => k + 1)} />
@@ -188,7 +212,9 @@ export default function ChatPage() {
             )}
           </div>
           {showInfo && activeConv && (
-            <GroupInfo conversation={activeConv} onClose={() => setShowInfo(false)} onChanged={() => { setRefreshKey((k) => k + 1); setActiveId(null) }} />
+            <div className={`${showChatOnMobile ? 'hidden md:block' : 'block'} shrink-0`}>
+              <GroupInfo conversation={activeConv} onClose={() => setShowInfo(false)} onChanged={() => { setRefreshKey((k) => k + 1); setActiveId(null) }} />
+            </div>
           )}
         </main>
       </div>

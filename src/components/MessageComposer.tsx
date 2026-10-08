@@ -28,7 +28,6 @@ export function MessageComposer({
     if (!body.trim() || !userId) return
     setSending(true)
     setFailed(false)
-    // optimistic: realtime INSERT will reconcile; on error show retry
     const { error } = await supabase.from('messages').insert({
       conversation_id: conversationId,
       sender_id: userId,
@@ -86,34 +85,41 @@ export function MessageComposer({
   }
 
   return (
-    <div className="border-t bg-white">
+    <div className="bg-[#f0f2f5] dark:bg-[#1f2c34] px-2 sm:px-4 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
       {replyTo && (
-        <div className="px-4 py-1 text-xs text-gray-600 bg-gray-50 border-b flex justify-between">
-          <span>Replying to: {replyTo.type === 'image' ? '📷 Photo' : (replyTo.body ?? '').slice(0, 80)}</span>
-          <button onClick={() => onReply(null)} className="underline">✕</button>
+        <div className="mx-1 mb-1.5 px-3 py-1.5 text-xs text-gray-600 dark:text-zinc-300 bg-white dark:bg-[#0b141a] rounded-xl border-l-4 border-brand-500 flex justify-between items-center">
+          <span className="truncate">Replying to: {replyTo.type === 'image' ? '📷 Photo' : (replyTo.body ?? '').slice(0, 80)}</span>
+          <button onClick={() => onReply(null)} className="ml-2 text-gray-400 text-base leading-none">✕</button>
         </div>
       )}
-      {failed && <p className="text-xs text-red-600 px-4 pt-1">Message failed to send <button className="underline" onClick={() => setFailed(false)}>Retry</button></p>}
-      {!navigator.onLine && <p className="text-xs text-amber-700 bg-amber-50 px-4 py-1">Offline — messages will send when reconnected</p>}
-      <form onSubmit={sendText} className="flex items-center gap-2 p-3">
-        <label className="cursor-pointer text-xl" title="Send photo">
-          📎
+      {failed && (
+        <p className="text-xs text-red-600 px-3 pb-1">Couldn't send <button className="underline font-semibold" onClick={() => setFailed(false)}>dismiss</button></p>
+      )}
+      {!navigator.onLine && <p className="text-xs text-amber-700 bg-amber-50 px-3 py-1 rounded-lg mb-1.5">Offline — messages will send when reconnected</p>}
+      <form onSubmit={sendText} className="flex items-end gap-1.5">
+        <label className="cursor-pointer w-11 h-11 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-2xl text-gray-500 dark:text-zinc-300" title="Send photo">
+          <span className="text-xl">＋</span>
           <input type="file" accept="image/*" className="hidden" onChange={(e) => {
             const f = e.target.files?.[0]
             if (f) void sendImage(f)
+            e.target.value = ''
           }} />
         </label>
         <input
-          className="flex-1 border rounded-full px-4 py-2 outline-none focus:ring-2 focus:ring-brand-100"
-          placeholder="Type a message…"
+          className="flex-1 rounded-full px-4 py-2.5 text-[15px] outline-none bg-white dark:bg-[#2a3942] text-gray-900 dark:text-zinc-100 placeholder:text-gray-400 shadow-sm"
+          placeholder="Message"
           value={body}
           onChange={(e) => {
             setBody(e.target.value)
             sendTyping()
           }}
         />
-        <button disabled={sending || !body.trim()} className="bg-brand-500 text-white rounded-full w-10 h-10 disabled:opacity-40">
-          {sending ? '…' : '➤'}
+        <button
+          disabled={sending || !body.trim()}
+          aria-label="Send"
+          className="w-11 h-11 shrink-0 rounded-full bg-brand-500 text-white text-lg flex items-center justify-center shadow disabled:opacity-40 active:scale-95 transition"
+        >
+          {sending ? <span className="typing-dots"><span>•</span></span> : '➤'}
         </button>
       </form>
     </div>

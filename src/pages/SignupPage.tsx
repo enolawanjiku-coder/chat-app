@@ -82,25 +82,23 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-full flex items-center justify-center p-6">
-      <form onSubmit={submit} className="w-full max-w-sm bg-white rounded-2xl shadow p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <img src="/logo.jpg" alt="Substack Connect" className="w-12 h-12 rounded-full object-cover" />
-          <div>
-            <h1 className="text-xl font-bold">substack <span className="text-brand-500">connect</span></h1>
-            <p className="text-sm text-gray-500">Create your account</p>
-          </div>
+    <div className="min-h-dvh flex items-center justify-center p-4 bg-brand-600">
+      <form onSubmit={submit} className="w-full max-w-sm bg-white rounded-3xl shadow-xl p-6 sm:p-8 space-y-4">
+        <div className="flex flex-col items-center text-center gap-2">
+          <img src="/logo.jpg" alt="Substack Connect" className="w-20 h-20 rounded-full object-cover shadow" />
+          <h1 className="text-2xl font-bold tracking-tight">substack <span className="text-brand-500">connect</span></h1>
+          <p className="text-sm text-gray-500">Create your account</p>
         </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        {info && <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded p-2">{info}</p>}
-        <input className="w-full border rounded-lg px-3 py-2" type="email" placeholder="email address" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input className="w-full border rounded-lg px-3 py-2" placeholder="username (a-z 0-9 _)" value={username} onChange={(e) => setUsername(e.target.value)} />
-        <input className="w-full border rounded-lg px-3 py-2" placeholder="display name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-        <input className="w-full border rounded-lg px-3 py-2" type="password" placeholder="password (min 8)" value={password} onChange={(e) => setPassword(e.target.value)} />
-        <button disabled={busy} className="w-full bg-brand-500 hover:bg-brand-600 text-white rounded-lg py-2 font-medium disabled:opacity-50">
+        {error && <p className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
+        {info && <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-xl px-3 py-2">{info}</p>}
+        <input className="w-full border border-black/10 rounded-2xl px-4 py-3 text-[15px] outline-none focus:ring-2 focus:ring-brand-200" type="email" inputMode="email" autoComplete="email" placeholder="Email address" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input className="w-full border border-black/10 rounded-2xl px-4 py-3 text-[15px] outline-none focus:ring-2 focus:ring-brand-200" placeholder="username (a-z 0-9 _)" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} />
+        <input className="w-full border border-black/10 rounded-2xl px-4 py-3 text-[15px] outline-none focus:ring-2 focus:ring-brand-200" placeholder="Display name" autoComplete="nickname" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+        <input className="w-full border border-black/10 rounded-2xl px-4 py-3 text-[15px] outline-none focus:ring-2 focus:ring-brand-200" type="password" autoComplete="new-password" placeholder="Password (min 8)" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <button disabled={busy} className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.99] text-white rounded-2xl py-3 font-semibold disabled:opacity-50 transition">
           {busy ? 'Creating…' : 'Sign up'}
         </button>
-        <p className="text-sm text-center">Have an account? <Link className="text-brand-600 underline" to="/login">Log in</Link></p>
+        <p className="text-sm text-center text-gray-500">Have an account? <Link className="text-brand-600 font-semibold" to="/login">Log in</Link></p>
       </form>
     </div>
   )

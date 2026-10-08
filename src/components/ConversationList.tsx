@@ -11,6 +11,14 @@ export type ConversationPreview = Conversation & {
   title: string
 }
 
+const AVATAR_BG = ['bg-red-100 text-red-700', 'bg-amber-100 text-amber-700', 'bg-emerald-100 text-emerald-700', 'bg-sky-100 text-sky-700', 'bg-violet-100 text-violet-700']
+
+function avatarColor(title: string): string {
+  let h = 0
+  for (const ch of title) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return AVATAR_BG[h % AVATAR_BG.length]
+}
+
 export function ConversationList({
   selectedId,
   onSelect,
@@ -40,7 +48,6 @@ export function ConversationList({
         return
       }
       const { data: convs } = await supabase.from('conversations').select('*').in('id', ids)
-      // resolve display titles: groups use name, directs use the OTHER person's username
       const { data: allMembers } = await supabase.from('conversation_members').select('conversation_id, user_id').in('conversation_id', ids)
       const otherIds = new Set<string>()
       const membersByConv = new Map<string, string[]>()
@@ -98,63 +105,66 @@ export function ConversationList({
     fetchConvs()
   }, [userId, refreshKey, selectedId])
 
-  // live-refresh list on any new message in user's conversations
-  useEffect(() => {
-    if (!userId) return
-    const channel = supabase
-      .channel('chat-list')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
-        // lightweight: trigger parent refresh via selectedId change is hacky;
-        // rely on refreshKey bumps from ChatPage realtime instead
-      })
-      .subscribe()
-    return () => {
-      supabase.removeChannel(channel)
+  const timeLabel = (iso: string | null): string => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    const now = new Date()
+    if (d.toDateString() === now.toDateString()) {
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
-  }, [userId])
+    const weekAgo = new Date(now.getTime() - 6 * 864e5)
+    if (d > weekAgo) return d.toLocaleDateString([], { weekday: 'short' })
+    return d.toLocaleDateString([], { day: 'numeric', month: 'numeric', year: '2-digit' })
+  }
 
   if (loading) {
     return (
-      <div className="p-2 space-y-2">
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="animate-pulse bg-gray-100 rounded-lg h-14" />
+      <div className="p-3 space-y-3">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="flex gap-3 items-center">
+            <div className="animate-pulse bg-gray-200 dark:bg-zinc-700 rounded-full w-12 h-12 shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div className="animate-pulse bg-gray-200 dark:bg-zinc-700 rounded h-3 w-2/3" />
+              <div className="animate-pulse bg-gray-200 dark:bg-zinc-700 rounded h-3 w-1/2" />
+            </div>
+          </div>
         ))}
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col pb-4">
       {conversations.length === 0 && (
-        <p className="text-sm text-gray-500 p-4">No chats yet. Search a username above to start.</p>
+        <div className="text-center px-6 py-10">
+          <p className="text-4xl mb-2">💬</p>
+          <p className="text-sm font-medium text-gray-700 dark:text-zinc-200">No chats yet</p>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">Search a username above to start your first conversation.</p>
+        </div>
       )}
       {conversations.map((c) => (
         <button
           key={c.id}
           onClick={() => onSelect(c.id)}
-          className={`flex items-center gap-3 text-left px-4 py-3 border-b hover:bg-gray-50 ${selectedId === c.id ? 'bg-brand-50' : ''}`}
+          className={`flex items-center gap-3 text-left px-3 py-2.5 mx-1.5 rounded-2xl active:scale-[0.99] transition hover:bg-black/5 dark:hover:bg-white/5 ${selectedId === c.id ? 'bg-brand-50 dark:bg-white/10' : ''}`}
         >
-          <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center font-bold shrink-0">
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg shrink-0 ${avatarColor(c.title)}`}>
             {c.title.slice(0, 1).toUpperCase()}
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 border-b border-black/5 dark:border-white/5 pb-2.5">
             <div className="flex justify-between items-baseline gap-2">
-              <p className="font-medium truncate">{c.title}</p>
-              {c.last_at && (
-                <span className="text-[10px] text-gray-400 shrink-0">
-                  {new Date(c.last_at).toLocaleDateString() === new Date().toLocaleDateString()
-                    ? new Date(c.last_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    : new Date(c.last_at).toLocaleDateString()}
-                </span>
-              )}
+              <p className="font-semibold text-[15px] truncate text-gray-900 dark:text-zinc-100">{c.title}</p>
+              {c.last_at && <span className={`text-[11px] shrink-0 ${c.unread > 0 ? 'text-brand-600 font-semibold' : 'text-gray-400'}`}>{timeLabel(c.last_at)}</span>}
             </div>
-            <div className="flex justify-between items-center gap-2">
-              <p className="text-xs text-gray-500 truncate">{c.last_body ?? `${c.type} chat — say hi`}</p>
-              {c.unread > 0 && (
-                <span className="text-[10px] bg-brand-500 text-white rounded-full min-w-5 h-5 px-1 flex items-center justify-center shrink-0">
+            <div className="flex justify-between items-center gap-2 mt-0.5">
+              <p className="text-[13px] text-gray-500 dark:text-zinc-400 truncate">{c.last_body ?? `${c.type === 'group' ? 'Group' : 'Say hi 👋'}`}</p>
+              {c.unread > 0 ? (
+                <span className="text-[11px] font-bold bg-brand-500 text-white rounded-full min-w-5 h-5 px-1.5 flex items-center justify-center shrink-0">
                   {c.unread > 99 ? '99+' : c.unread}
                 </span>
-              )}
+              ) : c.type === 'group' ? (
+                <span className="text-[10px] text-gray-400 shrink-0">👥</span>
+              ) : null}
             </div>
           </div>
         </button>
