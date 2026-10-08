@@ -56,10 +56,25 @@ export default function ChatPage() {
       setActiveConv(null)
       return
     }
-    supabase.from('conversations').select('*').eq('id', activeId).maybeSingle().then(({ data }) => {
-      setActiveConv(data as Conversation | null)
-    })
-  }, [activeId, refreshKey])
+    const loadTitle = async () => {
+      const { data } = await supabase.from('conversations').select('*').eq('id', activeId).maybeSingle()
+      const conv = data as Conversation | null
+      if (!conv) {
+        setActiveConv(null)
+        return
+      }
+      if (conv.type === 'direct' && !conv.name) {
+        const { data: members } = await supabase.from('conversation_members').select('user_id').eq('conversation_id', activeId)
+        const other = ((members ?? []) as { user_id: string }[]).map((m) => m.user_id).find((uid) => uid !== userId)
+        if (other) {
+          const { data: p } = await supabase.from('profiles').select('username, display_name').eq('id', other).maybeSingle()
+          if (p) conv.name = (p as { display_name: string | null; username: string }).display_name || `@${(p as { username: string }).username}`
+        }
+      }
+      setActiveConv(conv)
+    }
+    loadTitle()
+  }, [activeId, refreshKey, userId])
 
   // mark read + bump list
   useEffect(() => {

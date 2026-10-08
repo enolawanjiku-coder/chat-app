@@ -8,6 +8,7 @@ export type ConversationPreview = Conversation & {
   last_type: string | null
   last_at: string | null
   unread: number
+  title: string
 }
 
 export function ConversationList({
@@ -39,6 +40,26 @@ export function ConversationList({
         return
       }
       const { data: convs } = await supabase.from('conversations').select('*').in('id', ids)
+      // resolve display titles: groups use name, directs use the OTHER person's username
+      const { data: allMembers } = await supabase.from('conversation_members').select('conversation_id, user_id').in('conversation_id', ids)
+      const otherIds = new Set<string>()
+      const membersByConv = new Map<string, string[]>()
+      for (const m of (allMembers ?? []) as { conversation_id: string; user_id: string }[]) {
+        const list = membersByConv.get(m.conversation_id) ?? []
+        list.push(m.user_id)
+        membersByConv.set(m.conversation_id, list)
+        if (m.user_id !== userId) otherIds.add(m.user_id)
+      }
+      const { data: others } = otherIds.size
+        ? await supabase.from('profiles').select('id, username, display_name').in('id', [...otherIds])
+        : { data: [] as { id: string; username: string; display_name: string | null }[] }
+      const otherMap = new Map(((others ?? []) as { id: string; username: string; display_name: string | null }[]).map((p) => [p.id, p]))
+      const titleFor = (c: Conversation): string => {
+        if (c.type === 'group') return c.name ?? 'Group'
+        const other = (membersByConv.get(c.id) ?? []).find((uid) => uid !== userId)
+        const p = other ? otherMap.get(other) : undefined
+        return p ? (p.display_name || `@${p.username}`) : 'Direct chat'
+      }
       const previews: ConversationPreview[] = []
       for (const c of (convs ?? []) as Conversation[]) {
         const { data: last } = await supabase
@@ -67,6 +88,7 @@ export function ConversationList({
           last_type: last?.type ?? null,
           last_at: last?.created_at ?? null,
           unread,
+          title: titleFor(c),
         })
       }
       previews.sort((a, b) => (b.last_at ?? '').localeCompare(a.last_at ?? ''))
@@ -113,11 +135,11 @@ export function ConversationList({
           className={`flex items-center gap-3 text-left px-4 py-3 border-b hover:bg-gray-50 ${selectedId === c.id ? 'bg-brand-50' : ''}`}
         >
           <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center font-bold shrink-0">
-            {(c.name ?? '?').slice(0, 1).toUpperCase()}
+            {c.title.slice(0, 1).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex justify-between items-baseline gap-2">
-              <p className="font-medium truncate">{c.name ?? 'Direct chat'}</p>
+              <p className="font-medium truncate">{c.title}</p>
               {c.last_at && (
                 <span className="text-[10px] text-gray-400 shrink-0">
                   {new Date(c.last_at).toLocaleDateString() === new Date().toLocaleDateString()
