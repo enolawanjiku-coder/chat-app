@@ -8,6 +8,7 @@ import { useTyping } from '../hooks/useTyping'
 import { usePresence } from '../hooks/usePresence'
 import { useSession } from '../hooks/useSession'
 import { isValidUsername, normalizeUsername } from '../lib/username'
+import { WALLPAPERS, getWallpaper, setWallpaper, wallpaperSrc } from '../lib/wallpapers'
 import type { Conversation, Message } from '../lib/types'
 import { ConversationList } from '../components/ConversationList'
 import { MessageList } from '../components/MessageList'
@@ -36,6 +37,14 @@ export default function ChatPage() {
   const [dark, setDark] = useState(() => localStorage.getItem('sc-theme') === 'dark')
   const [search, setSearch] = useState('')
   const [notifOn, setNotifOn] = useState(typeof Notification !== 'undefined' && Notification.permission === 'granted')
+  const [wallpaperId, setWallpaperId] = useState(getWallpaper)
+  const [showWallpapers, setShowWallpapers] = useState(false)
+
+  const pickWallpaper = (id: string) => {
+    setWallpaper(id)
+    setWallpaperId(id)
+    setShowWallpapers(false)
+  }
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
@@ -153,6 +162,27 @@ export default function ChatPage() {
         </div>
         <div className="flex items-center gap-0.5 text-white">
           <button onClick={() => setDark((d) => !d)} title="Dark mode" className="w-10 h-10 rounded-full hover:bg-white/10 text-lg">{dark ? '☀️' : '🌙'}</button>
+          <div className="relative">
+            <button onClick={() => setShowWallpapers((s) => !s)} title="Chat wallpaper" className="w-10 h-10 rounded-full hover:bg-white/10 text-lg">🎨</button>
+            {showWallpapers && (
+              <div className="absolute right-0 top-11 bg-white dark:bg-zinc-800 rounded-2xl shadow-xl p-2 grid grid-cols-2 gap-2 w-44 z-30">
+                {WALLPAPERS.map((w) => (
+                  <button
+                    key={w.id}
+                    onClick={() => pickWallpaper(w.id)}
+                    className={`rounded-xl overflow-hidden border-2 text-left ${wallpaperId === w.id ? 'border-brand-500' : 'border-transparent'}`}
+                  >
+                    {w.src ? (
+                      <img src={w.src} alt={w.label} className="w-full h-16 object-cover" />
+                    ) : (
+                      <span className="block w-full h-16 chat-wallpaper" />
+                    )}
+                    <span className="block text-[11px] text-gray-600 dark:text-zinc-300 px-1.5 py-1">{w.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button onClick={enableNotif} title="Notifications" className="w-10 h-10 rounded-full hover:bg-white/10 text-lg">{notifOn ? '🔔' : '🔕'}</button>
           <Link to="/profile" title="Profile" className="h-10 px-2 rounded-full hover:bg-white/10 flex items-center text-sm font-medium max-w-28 truncate">
             @{profile?.username ?? '…'}
@@ -206,7 +236,7 @@ export default function ChatPage() {
                 <div className="px-3 py-1 bg-[#f0f2f5] dark:bg-[#1f2c34] shrink-0">
                   <input className="w-full text-sm rounded-full px-3.5 py-1.5 outline-none bg-white dark:bg-[#2a3942] dark:text-zinc-100 placeholder:text-gray-400" placeholder="🔍 Search messages…" value={search} onChange={(e) => setSearch(e.target.value)} />
                 </div>
-                <MessageList messages={visibleMessages} onLoadMore={loadMore} hasMore={hasMore && !search} loadingMore={loadingMore} replyTo={replyTo} onReply={setReplyTo} />
+                <MessageList messages={visibleMessages} onLoadMore={loadMore} hasMore={hasMore && !search} loadingMore={loadingMore} replyTo={replyTo} onReply={setReplyTo} wallpaper={wallpaperSrc(wallpaperId)} />
                 <MessageComposer conversationId={activeId} replyTo={replyTo} onReply={setReplyTo} onSent={() => setRefreshKey((k) => k + 1)} />
               </>
             )}

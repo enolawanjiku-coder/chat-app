@@ -37,6 +37,7 @@ export function MessageList({
   loadingMore,
   replyTo,
   onReply,
+  wallpaper,
 }: {
   messages: Message[]
   onLoadMore: () => void
@@ -44,6 +45,7 @@ export function MessageList({
   loadingMore: boolean
   replyTo: Message | null
   onReply: (m: Message | null) => void
+  wallpaper: string | null
 }) {
   const userId = useAuthStore((s) => s.userId)
   const [lightbox, setLightbox] = useState<string | null>(null)
@@ -88,7 +90,13 @@ export function MessageList({
   let lastDay = ''
 
   return (
-    <div className="flex-1 overflow-y-auto px-3 sm:px-8 py-3 space-y-1 chat-wallpaper nice-scroll" id="message-scroll">
+    <div
+      className={`flex-1 overflow-y-auto nice-scroll relative ${wallpaper ? '' : 'chat-wallpaper'}`}
+      id="message-scroll"
+      style={wallpaper ? { backgroundImage: `url(${wallpaper})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
+    >
+      {wallpaper && <div className="absolute inset-0 bg-white/80 dark:bg-[#0b141a]/80 pointer-events-none" />}
+      <div className="relative px-3 sm:px-8 py-3 space-y-1">
       {hasMore && (
         <div className="flex justify-center mb-2">
           <button onClick={onLoadMore} disabled={loadingMore} className="text-xs font-medium bg-white dark:bg-zinc-800 shadow rounded-full px-4 py-1.5 text-brand-600 disabled:opacity-40">
@@ -176,6 +184,7 @@ export function MessageList({
           <img src={lightbox} alt="full" className="max-w-full max-h-full rounded-lg" />
         </div>
       )}
+      </div>
     </div>
   )
 }
