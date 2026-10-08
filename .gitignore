@@ -2,6 +2,12 @@
 .env
 .env.local
 
+# Secrets — NEVER commit (Supabase access tokens, service keys)
+supabase/.secrets/
+*access-token*
+*service-key*
+sbp_*
+
 # Logs
 logs
 *.log
