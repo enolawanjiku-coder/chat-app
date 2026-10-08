@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { CheckCheck, Lock } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Message } from '../lib/types'
 import { useAuthStore } from '../store/authStore'
@@ -106,8 +107,8 @@ export function MessageList({
       )}
       {messages.length === 0 && (
         <div className="flex justify-center mt-10">
-          <p className="text-xs text-gray-600 dark:text-zinc-300 bg-[#fdf3c6] dark:bg-zinc-800 rounded-lg px-4 py-2 shadow text-center max-w-xs">
-            🔒 Messages are visible to chat members. Say hi to start the conversation.
+          <p className="flex items-center justify-center gap-1.5 text-xs text-gray-600 dark:text-zinc-300 bg-[#fdf3c6] dark:bg-zinc-800 rounded-lg px-4 py-2 shadow text-center max-w-xs">
+            <Lock className="w-3.5 h-3.5 shrink-0" /> Messages are visible to chat members. Say hi to start the conversation.
           </p>
         </div>
       )}
@@ -137,11 +138,11 @@ export function MessageList({
                 )}
                 {quoted && (
                   <div className={`text-xs rounded-lg px-2 py-1 mb-1 border-l-4 ${mine ? 'bg-black/5 border-brand-500' : 'bg-black/5 dark:bg-white/10 border-gray-300'}`}>
-                    {quoted.deleted_at ? <em className="opacity-60">deleted</em> : quoted.type === 'image' ? '📷 Photo' : (quoted.body ?? '').slice(0, 120)}
+                    {quoted.deleted_at ? <em className="opacity-60">deleted</em> : quoted.type === 'image' ? 'Photo' : (quoted.body ?? '').slice(0, 120)}
                   </div>
                 )}
                 {m.deleted_at ? (
-                  <p className="italic opacity-60 text-[13px] px-1 py-0.5">🚫 This message was deleted</p>
+                  <p className="italic opacity-60 text-[13px] px-1 py-0.5">This message was deleted</p>
                 ) : editingId === m.id ? (
                   <div className="flex gap-1 py-1">
                     <input autoFocus className="rounded-lg px-2 py-1 text-sm flex-1 text-gray-900 border" value={editBody} onChange={(e) => setEditBody(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(m) }} />
@@ -157,7 +158,7 @@ export function MessageList({
                     {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     {m.edited_at ? ' · edited' : ''}
                   </span>
-                  {mine && !m.deleted_at && <span className="text-[11px] text-sky-500">✓✓</span>}
+                  {mine && !m.deleted_at && <CheckCheck className="w-3.5 h-3.5 text-sky-500" />}
                 </div>
                 {!m.deleted_at && <MessageReactions messageId={m.id} mine={mine} />}
                 {!m.deleted_at && (

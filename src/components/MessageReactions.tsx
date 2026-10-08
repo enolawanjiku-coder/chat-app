@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { SmilePlus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 
@@ -58,8 +59,8 @@ export function MessageReactions({ messageId, mine }: { messageId: string; mine:
         </button>
       ))}
       <div className="relative">
-        <button onClick={() => setOpen((o) => !o)} className={`text-xs opacity-60 hover:opacity-100 ${mine ? 'text-white' : 'text-gray-400'}`} title="React">
-          ☺
+        <button onClick={() => setOpen((o) => !o)} aria-label="React" className={`hover:opacity-100 ${mine ? 'text-white/70' : 'text-gray-400'}`} title="React">
+          <SmilePlus className="w-3.5 h-3.5" />
         </button>
         {open && (
           <div className="absolute bottom-5 left-0 bg-white shadow-lg rounded-full px-2 py-1 flex gap-1 z-10 border">

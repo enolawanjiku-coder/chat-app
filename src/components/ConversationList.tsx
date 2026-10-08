@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { MessageCircle, Users } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import type { Conversation } from '../lib/types'
@@ -91,7 +92,7 @@ export function ConversationList({
         }
         previews.push({
           ...c,
-          last_body: last?.body ?? (last?.type === 'image' ? '📷 Photo' : null),
+          last_body: last?.body ?? (last?.type === 'image' ? 'Photo' : null),
           last_type: last?.type ?? null,
           last_at: last?.created_at ?? null,
           unread,
@@ -137,8 +138,8 @@ export function ConversationList({
     <div className="flex flex-col pb-4">
       {conversations.length === 0 && (
         <div className="text-center px-6 py-10">
-          <p className="text-4xl mb-2">💬</p>
-          <p className="text-sm font-medium text-gray-700 dark:text-zinc-200">No chats yet</p>
+          <MessageCircle className="w-10 h-10 mx-auto text-gray-300" />
+          <p className="text-sm font-medium text-gray-700 dark:text-zinc-200 mt-2">No chats yet</p>
           <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">Search a username above to start your first conversation.</p>
         </div>
       )}
@@ -163,7 +164,7 @@ export function ConversationList({
                   {c.unread > 99 ? '99+' : c.unread}
                 </span>
               ) : c.type === 'group' ? (
-                <span className="text-[10px] text-gray-400 shrink-0">👥</span>
+                <Users className="w-3.5 h-3.5 text-gray-400 shrink-0" />
               ) : null}
             </div>
           </div>

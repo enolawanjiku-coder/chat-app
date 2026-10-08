@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Plus } from 'lucide-react'
 import imageCompression from 'browser-image-compression'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
@@ -113,8 +114,8 @@ export function StatusRow({ onChanged }: { onChanged: () => void }) {
     <>
       <div className="flex gap-3 overflow-x-auto px-3 py-2.5 nice-scroll">
         <label className="flex flex-col items-center gap-1 shrink-0 cursor-pointer">
-          <span className="w-14 h-14 rounded-full bg-black/5 dark:bg-white/10 border-2 border-dashed border-gray-300 flex items-center justify-center text-xl">
-            {uploading ? '…' : '＋'}
+          <span className="w-14 h-14 rounded-full bg-black/5 dark:bg-white/10 border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400">
+            {uploading ? '…' : <Plus className="w-6 h-6" />}
           </span>
           <span className="text-[10px] text-gray-500 dark:text-zinc-400">My status</span>
           <input type="file" accept="image/*" className="hidden" onChange={(e) => {

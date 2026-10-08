@@ -56,8 +56,17 @@ export function useCalls() {
   const endCall = useCallback(
     (conversationId?: string, callId?: string) => {
       const a = activeRef.current
-      if (a) send(a.conversationId, 'end', { callId: a.callId, from: userRef.current })
-      else if (conversationId && callId) send(conversationId, 'end', { callId, from: userRef.current })
+      if (a) {
+        send(a.conversationId, 'end', { callId: a.callId, from: userRef.current })
+        const secs = Math.floor((Date.now() - a.startedAt) / 1000)
+        void supabase
+          .from('call_logs')
+          .update({ status: 'ended', ended_at: new Date().toISOString(), duration_s: secs })
+          .eq('call_id', a.callId)
+      } else if (conversationId && callId) {
+        send(conversationId, 'end', { callId, from: userRef.current })
+        void supabase.from('call_logs').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('call_id', callId)
+      }
       cleanup()
     },
     [cleanup, send],
@@ -138,6 +147,14 @@ export function useCalls() {
         const offer = await pc.createOffer()
         await pc.setLocalDescription(offer)
         setActive({ callId, conversationId, peerName, video, startedAt: Date.now(), localStream: stream, remoteStream: remote })
+        void supabase.from('call_logs').insert({
+          call_id: callId,
+          conversation_id: conversationId,
+          caller_id: userRef.current,
+          callee_id: to,
+          call_type: video ? 'video' : 'voice',
+          status: 'ringing',
+        })
         send(conversationId, 'ring', {
           callId,
           from: userRef.current,
@@ -148,9 +165,10 @@ export function useCalls() {
           offer,
         })
         startRing(true)
-        // auto-cancel after 45s
+        // auto-mark missed after 45s
         setTimeout(() => {
           if (activeRef.current?.callId === callId && pcRef.current?.connectionState !== 'connected') {
+            void supabase.from('call_logs').update({ status: 'missed', ended_at: new Date().toISOString() }).eq('call_id', callId)
             endCall(conversationId, callId)
             setCallError('No answer')
             setTimeout(() => setCallError(null), 3000)
@@ -190,6 +208,7 @@ export function useCalls() {
         setActive({ callId: inc.callId, conversationId: inc.conversationId, peerName: inc.fromName, video, startedAt: Date.now(), localStream: stream, remoteStream: remote })
         setIncoming(null)
         playConnected()
+        void supabase.from('call_logs').update({ status: 'accepted' }).eq('call_id', inc.callId)
         send(inc.conversationId, 'answer', { callId: inc.callId, to: inc.from, from: userRef.current, answer })
       } catch {
         setCallError('Could not access microphone/camera. Check permissions.')
@@ -201,7 +220,10 @@ export function useCalls() {
 
   const declineCall = useCallback(() => {
     const inc = incomingRef.current
-    if (inc) send(inc.conversationId, 'decline', { callId: inc.callId, to: inc.from, from: userRef.current })
+    if (inc) {
+      send(inc.conversationId, 'decline', { callId: inc.callId, to: inc.from, from: userRef.current })
+      void supabase.from('call_logs').update({ status: 'declined', ended_at: new Date().toISOString() }).eq('call_id', inc.callId)
+    }
     cleanup()
   }, [cleanup, send])
 

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Plus, Search, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 
@@ -42,10 +43,10 @@ export function NewChatDialog({ onCreated }: { onCreated: (id: string) => void }
       {!open ? (
         <div className="flex gap-2">
           <div className="flex-1 flex items-center gap-2 bg-white dark:bg-[#2a3942] rounded-full px-4 py-2 text-sm text-gray-400">
-            <span>🔍</span>
+            <Search className="w-4 h-4 shrink-0" />
             <button className="flex-1 text-left truncate" onClick={() => setOpen(true)}>Search or start new chat</button>
           </div>
-          <button onClick={() => setOpen(true)} className="w-10 h-10 rounded-full bg-brand-500 text-white text-xl shadow active:scale-95 transition shrink-0" title="New chat">＋</button>
+          <button onClick={() => setOpen(true)} aria-label="New chat" className="w-10 h-10 rounded-full bg-brand-500 text-white shadow active:scale-95 transition shrink-0 flex items-center justify-center" title="New chat"><Plus className="w-5 h-5" /></button>
         </div>
       ) : (
         <div className="bg-white dark:bg-[#2a3942] rounded-2xl p-3 space-y-2 shadow">
@@ -59,7 +60,7 @@ export function NewChatDialog({ onCreated }: { onCreated: (id: string) => void }
               onKeyDown={(e) => { if (e.key === 'Enter') search() }}
             />
             <button onClick={search} className="text-sm bg-brand-500 text-white rounded-full px-4 font-medium">Go</button>
-            <button onClick={() => setOpen(false)} className="text-gray-400 text-lg px-1">✕</button>
+            <button onClick={() => setOpen(false)} aria-label="Close" className="text-gray-400 px-1 flex items-center"><X className="w-5 h-5" /></button>
           </div>
           {results.map((r) => (
             <div key={r.id} className="flex items-center justify-between text-sm py-1">

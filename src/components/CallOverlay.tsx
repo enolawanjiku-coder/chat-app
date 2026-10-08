@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Mic, MicOff, Phone, PhoneOff, Video, VideoOff } from 'lucide-react'
 import type { ActiveCall, IncomingCall } from '../hooks/useCalls'
 
 function Timer({ startedAt }: { startedAt: number }) {
@@ -61,11 +62,13 @@ export function CallOverlay({
           </div>
           <div>
             <p className="font-bold text-lg dark:text-white">{incoming.fromName}</p>
-            <p className="text-sm text-gray-500">{incoming.video ? '🎥 Incoming video call…' : '📞 Incoming voice call…'}</p>
+            <p className="flex items-center justify-center gap-1.5 text-sm text-gray-500">
+              {incoming.video ? <Video className="w-4 h-4" /> : <Phone className="w-4 h-4" />} Incoming {incoming.video ? 'video' : 'voice'} call…
+            </p>
           </div>
           <div className="flex justify-center gap-4">
-            <button onClick={onDecline} className="w-14 h-14 rounded-full bg-red-500 text-white text-2xl shadow active:scale-95" title="Decline">✕</button>
-            <button onClick={() => onAccept(true)} className="w-14 h-14 rounded-full bg-green-500 text-white text-2xl shadow active:scale-95" title="Accept">📞</button>
+            <button onClick={onDecline} aria-label="Decline" className="w-14 h-14 rounded-full bg-red-500 text-white shadow active:scale-95 flex items-center justify-center"><PhoneOff className="w-6 h-6" /></button>
+            <button onClick={() => onAccept(true)} aria-label="Accept" className="w-14 h-14 rounded-full bg-green-500 text-white shadow active:scale-95 flex items-center justify-center"><Phone className="w-6 h-6" /></button>
           </div>
           {incoming.video && <p className="text-[11px] text-gray-400">Accepts with your camera on — you can turn it off in-call</p>}
         </div>
@@ -103,15 +106,15 @@ export function CallOverlay({
         <p className="text-center text-zinc-300 text-sm py-1"><Timer startedAt={active.startedAt} /> · {active.peerName}</p>
       )}
       <div className="flex justify-center items-center gap-5 p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-        <button onClick={toggleMute} className={`w-14 h-14 rounded-full text-2xl shadow ${muted ? 'bg-red-500 text-white' : 'bg-zinc-700 text-white'}`} title="Mute">
-          {muted ? '🔇' : '🎙️'}
+        <button onClick={toggleMute} aria-label="Mute" className={`w-14 h-14 rounded-full shadow flex items-center justify-center ${muted ? 'bg-red-500 text-white' : 'bg-zinc-700 text-white'}`}>
+          {muted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
         </button>
         {active.video && (
-          <button onClick={toggleCam} className={`w-14 h-14 rounded-full text-2xl shadow ${camOff ? 'bg-red-500 text-white' : 'bg-zinc-700 text-white'}`} title="Camera">
-            {camOff ? '📵' : '📹'}
+          <button onClick={toggleCam} aria-label="Camera" className={`w-14 h-14 rounded-full shadow flex items-center justify-center ${camOff ? 'bg-red-500 text-white' : 'bg-zinc-700 text-white'}`}>
+            {camOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}
           </button>
         )}
-        <button onClick={onEnd} className="w-16 h-16 rounded-full bg-red-600 text-white text-3xl shadow active:scale-95" title="End call">📞</button>
+        <button onClick={onEnd} aria-label="End call" className="w-16 h-16 rounded-full bg-red-600 text-white shadow active:scale-95 flex items-center justify-center"><PhoneOff className="w-7 h-7" /></button>
       </div>
     </div>
   )

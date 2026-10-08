@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Camera } from 'lucide-react'
 import imageCompression from 'browser-image-compression'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
@@ -105,8 +106,8 @@ export default function ProfilePage() {
             {(profile?.username ?? '?').slice(0, 1).toUpperCase()}
           </div>
         )}
-        <label className="cursor-pointer text-sm bg-gray-900 dark:bg-zinc-700 text-white rounded-full px-4 py-2">
-          {uploading ? 'Uploading…' : '📷 Change photo'}
+        <label className="cursor-pointer text-sm bg-gray-900 dark:bg-zinc-700 text-white rounded-full px-4 py-2 flex items-center gap-1.5">
+          {uploading ? 'Uploading…' : <><Camera className="w-4 h-4" /> Change photo</>}
           <input type="file" accept="image/*" className="hidden" onChange={(e) => {
             const f = e.target.files?.[0]
             if (f) void uploadAvatar(f)

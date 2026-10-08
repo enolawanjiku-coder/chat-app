@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import type { Conversation } from '../lib/types'
@@ -81,7 +82,7 @@ export function GroupInfo({ conversation, onClose, onChanged }: { conversation: 
     <div className="p-4 space-y-3 bg-white border-l w-72 overflow-y-auto">
       <div className="flex justify-between items-center">
         <h2 className="font-bold">{isGroup ? 'Group info' : 'Chat info'}</h2>
-        <button onClick={onClose} className="text-gray-500">✕</button>
+        <button onClick={onClose} aria-label="Close" className="text-gray-500 flex items-center"><X className="w-5 h-5" /></button>
       </div>
       {isGroup && (
         <div className="flex gap-2">

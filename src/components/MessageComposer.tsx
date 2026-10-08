@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import imageCompression from 'browser-image-compression'
+import { Plus, SendHorizontal, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { playSend } from '../lib/sounds'
 import { useAuthStore } from '../store/authStore'
@@ -91,8 +92,8 @@ export function MessageComposer({
     <div className="bg-[#f0f2f5] dark:bg-[#1f2c34] px-2 sm:px-4 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
       {replyTo && (
         <div className="mx-1 mb-1.5 px-3 py-1.5 text-xs text-gray-600 dark:text-zinc-300 bg-white dark:bg-[#0b141a] rounded-xl border-l-4 border-brand-500 flex justify-between items-center">
-          <span className="truncate">Replying to: {replyTo.type === 'image' ? '📷 Photo' : (replyTo.body ?? '').slice(0, 80)}</span>
-          <button onClick={() => onReply(null)} className="ml-2 text-gray-400 text-base leading-none">✕</button>
+          <span className="truncate">Replying to: {replyTo.type === 'image' ? 'Photo' : (replyTo.body ?? '').slice(0, 80)}</span>
+          <button onClick={() => onReply(null)} aria-label="Cancel reply" className="ml-2 text-gray-400 flex items-center"><X className="w-4 h-4" /></button>
         </div>
       )}
       {failed && (
@@ -100,8 +101,8 @@ export function MessageComposer({
       )}
       {!navigator.onLine && <p className="text-xs text-amber-700 bg-amber-50 px-3 py-1 rounded-lg mb-1.5">Offline — messages will send when reconnected</p>}
       <form onSubmit={sendText} className="flex items-end gap-1.5">
-        <label className="cursor-pointer w-11 h-11 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-2xl text-gray-500 dark:text-zinc-300" title="Send photo">
-          <span className="text-xl">＋</span>
+        <label className="cursor-pointer w-11 h-11 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-gray-500 dark:text-zinc-300" title="Send photo">
+          <Plus className="w-6 h-6" />
           <input type="file" accept="image/*" className="hidden" onChange={(e) => {
             const f = e.target.files?.[0]
             if (f) void sendImage(f)
@@ -120,9 +121,9 @@ export function MessageComposer({
         <button
           disabled={sending || !body.trim()}
           aria-label="Send"
-          className="w-11 h-11 shrink-0 rounded-full bg-brand-500 text-white text-lg flex items-center justify-center shadow disabled:opacity-40 active:scale-95 transition"
+          className="w-11 h-11 shrink-0 rounded-full bg-brand-500 text-white flex items-center justify-center shadow disabled:opacity-40 active:scale-95 transition"
         >
-          {sending ? <span className="typing-dots"><span>•</span></span> : '➤'}
+          {sending ? <span className="typing-dots"><span>•</span></span> : <SendHorizontal className="w-5 h-5" />}
         </button>
       </form>
     </div>
