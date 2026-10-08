@@ -78,6 +78,26 @@ export default function ChatPage() {
     }
   }, [])
 
+  // browser notifications for incoming messages while tab hidden
+  const [notifOn, setNotifOn] = useState(typeof Notification !== 'undefined' && Notification.permission === 'granted')
+  const [search, setSearch] = useState('')
+  useEffect(() => {
+    if (!notifOn || !document.hidden || messages.length === 0) return
+    const last = messages[messages.length - 1]
+    if (last.sender_id === userId || last.deleted_at) return
+    new Notification('Substack Connect', { body: last.type === 'image' ? '📷 New photo' : (last.body ?? 'New message').slice(0, 120) })
+  }, [messages, notifOn, userId])
+
+  const enableNotif = async () => {
+    if (typeof Notification === 'undefined') return
+    const perm = await Notification.requestPermission()
+    setNotifOn(perm === 'granted')
+  }
+
+  const visibleMessages = search.trim()
+    ? messages.filter((m) => (m.body ?? '').toLowerCase().includes(search.trim().toLowerCase()))
+    : messages
+
   const completeProfile = async (e: React.FormEvent) => {
     e.preventDefault()
     setSetupError(null)
@@ -110,6 +130,7 @@ export default function ChatPage() {
           <h1 className="font-bold">substack <span className="text-brand-500">connect</span></h1>
         </div>
         <div className="flex items-center gap-3 text-sm">
+          <button onClick={enableNotif} title="Browser notifications" className="text-lg">{notifOn ? '🔔' : '🔕'}</button>
           <Link to="/profile" className="text-gray-600 underline">@{profile?.username ?? '…'}</Link>
           <button onClick={logout} className="border rounded-lg px-3 py-1">Logout</button>
         </div>
@@ -143,7 +164,10 @@ export default function ChatPage() {
                   <span className="text-gray-400"> · {onlineIds.length > 0 ? `${onlineIds.length} online` : '● online'} · info ›</span>
                   {typingUsers.length > 0 && <span className="text-brand-600"> · {typingUsers.join(', ')} typing…</span>}
                 </button>
-                <MessageList messages={messages} onLoadMore={loadMore} hasMore={hasMore} loadingMore={loadingMore} replyTo={replyTo} onReply={setReplyTo} />
+                <div className="px-4 py-1 bg-white border-b">
+                  <input className="w-full text-sm border rounded-full px-3 py-1 outline-none" placeholder="Search messages…" value={search} onChange={(e) => setSearch(e.target.value)} />
+                </div>
+                <MessageList messages={visibleMessages} onLoadMore={loadMore} hasMore={hasMore && !search} loadingMore={loadingMore} replyTo={replyTo} onReply={setReplyTo} />
                 <MessageComposer conversationId={activeId} replyTo={replyTo} onReply={setReplyTo} onSent={() => setRefreshKey((k) => k + 1)} />
               </>
             )}

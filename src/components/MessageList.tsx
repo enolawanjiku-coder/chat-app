@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Message } from '../lib/types'
 import { useAuthStore } from '../store/authStore'
+import { MessageReactions } from './MessageReactions'
 
 function ImageBubble({ path, onOpen }: { path: string; onOpen: (url: string) => void }) {
   const [url, setUrl] = useState<string | null>(null)
@@ -94,6 +95,7 @@ export function MessageList({
                   {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   {m.edited_at ? ' · edited' : ''}
                 </p>
+                {!m.deleted_at && <MessageReactions messageId={m.id} mine={mine} />}
                 {!m.deleted_at && (
                   <div className={`flex gap-2 mt-1 text-[11px] opacity-0 group-hover:opacity-100 ${mine ? 'text-white/80' : 'text-gray-500'}`}>
                     <button onClick={() => onReply(m)} className="underline">Reply</button>

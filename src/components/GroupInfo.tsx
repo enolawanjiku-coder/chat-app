@@ -67,6 +67,16 @@ export function GroupInfo({ conversation, onClose, onChanged }: { conversation: 
     else onChanged()
   }
 
+  const copyInvite = async () => {
+    const link = `${window.location.origin}/join/${conversation.id}`
+    try {
+      await navigator.clipboard.writeText(link)
+      alert('Invite link copied — anyone with the link joins the chat.')
+    } catch {
+      prompt('Copy this invite link:', link)
+    }
+  }
+
   return (
     <div className="p-4 space-y-3 bg-white border-l w-72 overflow-y-auto">
       <div className="flex justify-between items-center">
@@ -95,6 +105,7 @@ export function GroupInfo({ conversation, onClose, onChanged }: { conversation: 
         </div>
       )}
       <button onClick={leave} className="text-sm text-red-600 underline">Leave chat</button>
+      <button onClick={copyInvite} className="text-sm text-brand-600 underline text-left">Copy invite link</button>
     </div>
   )
 }
