@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import imageCompression from 'browser-image-compression'
 import { supabase } from '../lib/supabase'
+import { playSend } from '../lib/sounds'
 import { useAuthStore } from '../store/authStore'
 import { useTyping } from '../hooks/useTyping'
 import type { Message } from '../lib/types'
@@ -40,6 +41,7 @@ export function MessageComposer({
       setBody('')
       onReply(null)
       onSent()
+      playSend()
     } else {
       setFailed(true)
     }
@@ -76,6 +78,7 @@ export function MessageComposer({
       if (msgError) throw msgError
       onReply(null)
       onSent()
+      playSend()
     } catch (err) {
       setFailed(true)
       alert(err instanceof Error ? err.message : 'Image upload failed')

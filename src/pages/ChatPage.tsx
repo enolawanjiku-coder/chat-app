@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
@@ -7,6 +7,8 @@ import { useMessages } from '../hooks/useMessages'
 import { useTyping } from '../hooks/useTyping'
 import { usePresence } from '../hooks/usePresence'
 import { useSession } from '../hooks/useSession'
+import { useCalls } from '../hooks/useCalls'
+import { isMuted, playPop, playTick, setMuted } from '../lib/sounds'
 import { isValidUsername, normalizeUsername } from '../lib/username'
 import { WALLPAPERS, getWallpaper, setWallpaper, wallpaperSrc } from '../lib/wallpapers'
 import type { Conversation, Message } from '../lib/types'
@@ -15,6 +17,8 @@ import { MessageList } from '../components/MessageList'
 import { MessageComposer } from '../components/MessageComposer'
 import { NewChatDialog } from '../components/NewChatDialog'
 import { GroupInfo } from '../components/GroupInfo'
+import { StatusRow } from '../components/StatusRow'
+import { CallOverlay } from '../components/CallOverlay'
 
 export default function ChatPage() {
   const navigate = useNavigate()
@@ -36,7 +40,31 @@ export default function ChatPage() {
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [dark, setDark] = useState(() => localStorage.getItem('sc-theme') === 'dark')
   const [search, setSearch] = useState('')
+  const [otherUserId, setOtherUserId] = useState<string | null>(null)
   const [notifOn, setNotifOn] = useState(typeof Notification !== 'undefined' && Notification.permission === 'granted')
+  const [muted, setMutedState] = useState(isMuted())
+  const { incoming, active, callError, startCall, acceptCall, declineCall, endCall } = useCalls()
+  const prevMsgCount = useRef(0)
+
+  const toggleSound = () => {
+    const next = !muted
+    setMuted(next)
+    setMutedState(next)
+  }
+
+  // incoming message pop + typing tick
+  useEffect(() => {
+    if (messages.length > prevMsgCount.current && prevMsgCount.current > 0) {
+      const last = messages[messages.length - 1]
+      if (last.sender_id !== userId && !last.deleted_at) playPop()
+    }
+    prevMsgCount.current = messages.length
+  }, [messages, userId])
+  const prevTyping = useRef(0)
+  useEffect(() => {
+    if (typingUsers.length > 0 && prevTyping.current === 0) playTick()
+    prevTyping.current = typingUsers.length
+  }, [typingUsers])
   const [wallpaperId, setWallpaperId] = useState(getWallpaper)
   const [showWallpapers, setShowWallpapers] = useState(false)
 
@@ -83,10 +111,13 @@ export default function ChatPage() {
       if (conv.type === 'direct' && !conv.name) {
         const { data: members } = await supabase.from('conversation_members').select('user_id').eq('conversation_id', activeId)
         const other = ((members ?? []) as { user_id: string }[]).map((m) => m.user_id).find((uid) => uid !== userId)
+        setOtherUserId(other ?? null)
         if (other) {
           const { data: p } = await supabase.from('profiles').select('username, display_name').eq('id', other).maybeSingle()
           if (p) conv.name = (p as { display_name: string | null; username: string }).display_name || `@${(p as { username: string }).username}`
         }
+      } else {
+        setOtherUserId(null)
       }
       setActiveConv(conv)
     }
@@ -162,6 +193,7 @@ export default function ChatPage() {
         </div>
         <div className="flex items-center gap-0.5 text-white">
           <button onClick={() => setDark((d) => !d)} title="Dark mode" className="w-10 h-10 rounded-full hover:bg-white/10 text-lg">{dark ? '☀️' : '🌙'}</button>
+          <button onClick={toggleSound} title="Sounds" className="w-10 h-10 rounded-full hover:bg-white/10 text-lg">{muted ? '🔇' : '🔊'}</button>
           <div className="relative">
             <button onClick={() => setShowWallpapers((s) => !s)} title="Chat wallpaper" className="w-10 h-10 rounded-full hover:bg-white/10 text-lg">🎨</button>
             {showWallpapers && (
@@ -205,6 +237,7 @@ export default function ChatPage() {
         {/* conversation list pane */}
         <aside className={`${showChatOnMobile ? 'hidden' : 'flex'} md:flex flex-col min-h-0 flex-1 md:flex-none md:w-[340px] bg-white dark:bg-[#111b21] md:rounded-2xl md:shadow overflow-hidden`}>
           <NewChatDialog onCreated={(id) => { setActiveId(id); setRefreshKey((k) => k + 1) }} />
+          <StatusRow onChanged={() => {}} />
           <div className="flex-1 overflow-y-auto nice-scroll">
             <ConversationList selectedId={activeId} onSelect={setActiveId} refreshKey={refreshKey} />
           </div>
@@ -221,18 +254,30 @@ export default function ChatPage() {
               </div>
             ) : (
               <>
-                <button onClick={() => setShowInfo((s) => !s)} className="flex items-center gap-2 px-2 py-1.5 bg-[#f0f2f5] dark:bg-[#1f2c34] text-left shrink-0">
-                  <span onClick={(e) => { e.stopPropagation(); setActiveId(null) }} className="md:hidden w-9 h-9 flex items-center justify-center text-xl text-gray-600 dark:text-zinc-300" aria-label="Back">←</span>
-                  <span className="w-10 h-10 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center font-bold shrink-0">
-                    {(activeConv?.name ?? '?').slice(0, 1).toUpperCase()}
-                  </span>
-                  <span className="flex-1 min-w-0">
-                    <span className="block font-semibold text-[15px] truncate text-gray-900 dark:text-zinc-100">{activeConv?.name ?? '…'}</span>
-                    <span className="block text-xs text-gray-500 dark:text-zinc-400 truncate">
-                      {typingUsers.length > 0 ? <span className="text-brand-600 font-medium typing-dots">{typingUsers.join(', ')} typing<span>•</span><span>•</span><span>•</span></span> : onlineIds.length > 0 ? `${onlineIds.length} online` : 'tap for info'}
+                <div className="flex items-center gap-0.5 px-1 py-1 bg-[#f0f2f5] dark:bg-[#1f2c34] shrink-0">
+                  <button onClick={() => setShowInfo((s) => !s)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
+                    <span onClick={(e) => { e.stopPropagation(); setActiveId(null) }} className="md:hidden w-9 h-9 flex items-center justify-center text-xl text-gray-600 dark:text-zinc-300 shrink-0" aria-label="Back">←</span>
+                    <span className="w-10 h-10 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center font-bold shrink-0">
+                      {(activeConv?.name ?? '?').slice(0, 1).toUpperCase()}
                     </span>
-                  </span>
-                </button>
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-semibold text-[15px] truncate text-gray-900 dark:text-zinc-100">{activeConv?.name ?? '…'}</span>
+                      <span className="block text-xs text-gray-500 dark:text-zinc-400 truncate">
+                        {typingUsers.length > 0 ? <span className="text-brand-600 font-medium typing-dots">{typingUsers.join(', ')} typing<span>•</span><span>•</span><span>•</span></span> : onlineIds.length > 0 ? `${onlineIds.length} online` : 'tap for info'}
+                      </span>
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => activeId && startCall(activeId, activeConv?.name ?? 'Chat', false, otherUserId)}
+                    title="Voice call"
+                    className="w-10 h-10 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-xl shrink-0"
+                  >📞</button>
+                  <button
+                    onClick={() => activeId && startCall(activeId, activeConv?.name ?? 'Chat', true, otherUserId)}
+                    title="Video call"
+                    className="w-10 h-10 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-xl shrink-0"
+                  >🎥</button>
+                </div>
                 <div className="px-3 py-1 bg-[#f0f2f5] dark:bg-[#1f2c34] shrink-0">
                   <input className="w-full text-sm rounded-full px-3.5 py-1.5 outline-none bg-white dark:bg-[#2a3942] dark:text-zinc-100 placeholder:text-gray-400" placeholder="🔍 Search messages…" value={search} onChange={(e) => setSearch(e.target.value)} />
                 </div>
@@ -248,6 +293,12 @@ export default function ChatPage() {
           )}
         </main>
       </div>
+      {callError && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm rounded-full px-4 py-2 shadow-lg z-40">
+          {callError}
+        </div>
+      )}
+      <CallOverlay incoming={incoming} active={active} onAccept={acceptCall} onDecline={declineCall} onEnd={() => endCall()} />
     </div>
   )
 }
