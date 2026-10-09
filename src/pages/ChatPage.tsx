@@ -31,6 +31,7 @@ export default function ChatPage() {
   const activeId = useChatStore((s) => s.activeConversationId)
   const setActiveId = useChatStore((s) => s.setActiveConversationId)
   useSession()
+  const hydrated = useAuthStore((s) => s.hydrated)
   const { messages, loadMore, loadingMore, hasMore } = useMessages(activeId)
   const { typingUsers } = useTyping(activeId, profile?.username ?? '')
   const { onlineIds } = usePresence(activeId)
@@ -96,10 +97,9 @@ export default function ChatPage() {
   }, [])
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) navigate('/login')
-    })
-  }, [navigate])
+    if (!hydrated) return
+    if (!userId) navigate('/login')
+  }, [navigate, hydrated, userId])
 
   useEffect(() => {
     if (!activeId) {
@@ -216,6 +216,15 @@ export default function ChatPage() {
 
   // mobile: show list OR chat; desktop: both
   const showChatOnMobile = !!activeId
+
+  if (!hydrated) {
+    return (
+      <div className="h-dvh flex flex-col items-center justify-center gap-3 bg-brand-600">
+        <img src="/logo.jpg" className="w-16 h-16 rounded-full object-cover" alt="" />
+        <div className="w-8 h-8 rounded-full border-4 border-white/30 border-t-white animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="h-dvh flex flex-col bg-[#e9e4dc] dark:bg-[#0b141a]">
