@@ -13,17 +13,17 @@ export function useSession() {
       if (mounted) setAuth(userId, profile ?? null)
     }
     const init = async () => {
-      const { data } = await supabase.auth.getSession()
-      const userId = data.session?.user.id ?? null
-      if (!userId) {
-        if (mounted) {
-          setAuth(null, null)
-          setHydrated()
+      try {
+        const { data } = await supabase.auth.getSession()
+        const userId = data.session?.user.id ?? null
+        if (!userId) {
+          if (mounted) setAuth(null, null)
+          return
         }
-        return
+        await loadProfile(userId)
+      } finally {
+        if (mounted) setHydrated()
       }
-      await loadProfile(userId)
-      if (mounted) setHydrated()
     }
     init()
 

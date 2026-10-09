@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Menu, Phone, Video } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { supabase, missingSupabaseConfig } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { useMessages } from '../hooks/useMessages'
@@ -222,6 +222,17 @@ export default function ChatPage() {
       <div className="h-dvh flex flex-col items-center justify-center gap-3 bg-brand-600">
         <img src="/logo.jpg" className="w-16 h-16 rounded-full object-cover" alt="" />
         <div className="w-8 h-8 rounded-full border-4 border-white/30 border-t-white animate-spin" />
+      </div>
+    )
+  }
+
+  if (missingSupabaseConfig) {
+    return (
+      <div className="h-dvh flex items-center justify-center p-6 bg-brand-600">
+        <div className="bg-white rounded-3xl shadow-xl p-6 max-w-sm text-center space-y-2">
+          <p className="font-bold">App not connected</p>
+          <p className="text-sm text-gray-600">Missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY. Add them in Vercel → Settings → Environment Variables, then redeploy.</p>
+        </div>
       </div>
     )
   }

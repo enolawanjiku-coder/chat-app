@@ -1,7 +1,8 @@
-// Minimal SW: network-first for navigations/API, cache fallback for static assets.
-const CACHE = 'sc-v1'
+// v2: only cache immutable hashed assets. Never cache navigations or API traffic,
+// so new deploys can never serve a stale app shell.
+const CACHE = 'sc-v2'
 
-self.addEventListener('install', (e) => {
+self.addEventListener('install', () => {
   self.skipWaiting()
 })
 
@@ -15,15 +16,24 @@ self.addEventListener('fetch', (e) => {
   const { request } = e
   if (request.method !== 'GET') return
   const url = new URL(request.url)
-  // never cache supabase api/realtime traffic
+  // never touch supabase traffic
   if (url.hostname.includes('supabase.co')) return
+  // navigations always go to network (offline falls back to cached shell)
+  if (request.mode === 'navigate') {
+    e.respondWith(fetch(request).catch(() => caches.match('/')))
+    return
+  }
+  // cache only versioned static assets (js/css/images), never html
+  if (!url.pathname.startsWith('/assets/')) return
   e.respondWith(
-    fetch(request)
-      .then((res) => {
-        const copy = res.clone()
-        caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {})
-        return res
-      })
-      .catch(() => caches.match(request).then((hit) => hit || caches.match('/'))),
+    caches.match(request).then(
+      (hit) =>
+        hit ||
+        fetch(request).then((res) => {
+          const copy = res.clone()
+          caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {})
+          return res
+        }),
+    ),
   )
 })
