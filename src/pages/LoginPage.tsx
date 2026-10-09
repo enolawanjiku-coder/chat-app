@@ -1,7 +1,16 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { supabase, missingSupabaseConfig } from '../lib/supabase'
 import { isValidEmail } from '../lib/username'
+
+const BUILD = '23ba594'
+const CONF_HOST = (() => {
+  try {
+    return new URL(import.meta.env.VITE_SUPABASE_URL as string).hostname
+  } catch {
+    return 'missing'
+  }
+})()
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -53,6 +62,7 @@ export default function LoginPage() {
           {busy ? 'Logging in…' : 'Log in'}
         </button>
         <p className="text-sm text-center text-gray-500">No account? <Link className="text-brand-600 font-semibold" to="/signup">Sign up</Link></p>
+        <p className="text-[10px] text-center text-gray-300">build {BUILD} · {missingSupabaseConfig ? 'NOT CONFIGURED' : CONF_HOST}</p>
       </form>
     </div>
   )
