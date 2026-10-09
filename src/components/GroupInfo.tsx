@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import type { Conversation } from '../lib/types'
 
-type Member = { user_id: string; role: string; username?: string; display_name?: string | null }
+type Member = { user_id: string; role: string; username?: string; display_name?: string | null; avatar_url?: string | null }
 
 export function GroupInfo({ conversation, onClose, onChanged }: { conversation: Conversation; onClose: () => void; onChanged: () => void }) {
   const userId = useAuthStore((s) => s.userId)
@@ -17,9 +17,9 @@ export function GroupInfo({ conversation, onClose, onChanged }: { conversation: 
     const { data } = await supabase.from('conversation_members').select('user_id, role').eq('conversation_id', conversation.id)
     const rows = (data ?? []) as { user_id: string; role: string }[]
     const ids = rows.map((r) => r.user_id)
-    const { data: profiles } = await supabase.from('profiles').select('id, username, display_name').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000'])
+    const { data: profiles } = await supabase.from('profiles').select('id, username, display_name, avatar_url').in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000'])
     const pmap = new Map((profiles ?? []).map((p) => [p.id, p]))
-    setMembers(rows.map((r) => ({ ...r, username: pmap.get(r.user_id)?.username, display_name: pmap.get(r.user_id)?.display_name })))
+    setMembers(rows.map((r) => ({ ...r, username: pmap.get(r.user_id)?.username, display_name: pmap.get(r.user_id)?.display_name, avatar_url: pmap.get(r.user_id)?.avatar_url })))
     setMyRole(rows.find((r) => r.user_id === userId)?.role ?? 'member')
   }
 
@@ -92,8 +92,17 @@ export function GroupInfo({ conversation, onClose, onChanged }: { conversation: 
       )}
       <h3 className="text-sm font-medium">Members ({members.length})</h3>
       {members.map((m) => (
-        <div key={m.user_id} className="flex justify-between items-center text-sm">
-          <span>@{m.username ?? m.user_id.slice(0, 6)} <span className="text-gray-400 text-xs">{m.role}</span></span>
+        <div key={m.user_id} className="flex justify-between items-center text-sm gap-2">
+          <span className="flex items-center gap-2 min-w-0">
+            {m.avatar_url ? (
+              <img src={m.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
+            ) : (
+              <span className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-sm shrink-0">
+                {(m.username ?? '?').slice(0, 1).toUpperCase()}
+              </span>
+            )}
+            <span className="truncate">@{m.username ?? m.user_id.slice(0, 6)} <span className="text-gray-400 text-xs">{m.role}</span></span>
+          </span>
           {canManage && m.user_id !== userId && (
             <button onClick={() => removeMember(m.user_id)} className="text-red-600 text-xs underline">Remove</button>
           )}

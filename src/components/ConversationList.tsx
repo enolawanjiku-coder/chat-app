@@ -10,6 +10,7 @@ export type ConversationPreview = Conversation & {
   last_at: string | null
   unread: number
   title: string
+  avatar: string | null
 }
 
 const AVATAR_BG = ['bg-red-100 text-red-700', 'bg-amber-100 text-amber-700', 'bg-emerald-100 text-emerald-700', 'bg-sky-100 text-sky-700', 'bg-violet-100 text-violet-700']
@@ -59,9 +60,9 @@ export function ConversationList({
         if (m.user_id !== userId) otherIds.add(m.user_id)
       }
       const { data: others } = otherIds.size
-        ? await supabase.from('profiles').select('id, username, display_name').in('id', [...otherIds])
-        : { data: [] as { id: string; username: string; display_name: string | null }[] }
-      const otherMap = new Map(((others ?? []) as { id: string; username: string; display_name: string | null }[]).map((p) => [p.id, p]))
+        ? await supabase.from('profiles').select('id, username, display_name, avatar_url').in('id', [...otherIds])
+        : { data: [] as { id: string; username: string; display_name: string | null; avatar_url: string | null }[] }
+      const otherMap = new Map(((others ?? []) as { id: string; username: string; display_name: string | null; avatar_url: string | null }[]).map((p) => [p.id, p]))
       const titleFor = (c: Conversation): string => {
         if (c.type === 'group') return c.name ?? 'Group'
         const other = (membersByConv.get(c.id) ?? []).find((uid) => uid !== userId)
@@ -97,6 +98,12 @@ export function ConversationList({
           last_at: last?.created_at ?? null,
           unread,
           title: titleFor(c),
+          avatar: c.type === 'direct'
+            ? (() => {
+                const other = (membersByConv.get(c.id) ?? []).find((uid) => uid !== userId)
+                return (other && otherMap.get(other)?.avatar_url) || null
+              })()
+            : c.avatar_url,
         })
       }
       previews.sort((a, b) => (b.last_at ?? '').localeCompare(a.last_at ?? ''))
@@ -149,9 +156,13 @@ export function ConversationList({
           onClick={() => onSelect(c.id)}
           className={`flex items-center gap-3 text-left px-3 py-2.5 mx-1.5 rounded-2xl active:scale-[0.99] transition hover:bg-black/5 dark:hover:bg-white/5 ${selectedId === c.id ? 'bg-brand-50 dark:bg-white/10' : ''}`}
         >
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg shrink-0 ${avatarColor(c.title)}`}>
-            {c.title.slice(0, 1).toUpperCase()}
-          </div>
+          {c.avatar ? (
+            <img src={c.avatar} alt={c.title} className="w-12 h-12 rounded-full object-cover shrink-0" />
+          ) : (
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg shrink-0 ${avatarColor(c.title)}`}>
+              {c.title.slice(0, 1).toUpperCase()}
+            </div>
+          )}
           <div className="flex-1 min-w-0 border-b border-black/5 dark:border-white/5 pb-2.5">
             <div className="flex justify-between items-baseline gap-2">
               <p className="font-semibold text-[15px] truncate text-gray-900 dark:text-zinc-100">{c.title}</p>

@@ -44,6 +44,8 @@ export default function ChatPage() {
   const [dark, setDark] = useState(() => localStorage.getItem('sc-theme') === 'dark')
   const [search, setSearch] = useState('')
   const [otherUserId, setOtherUserId] = useState<string | null>(null)
+  const [otherAvatar, setOtherAvatar] = useState<string | null>(null)
+  const [otherLastSeen, setOtherLastSeen] = useState<string | null>(null)
   const [notifOn, setNotifOn] = useState(typeof Notification !== 'undefined' && Notification.permission === 'granted')
   const [muted, setMutedState] = useState(isMuted())
   const { incoming, active, callError, startCall, acceptCall, declineCall, endCall } = useCalls()
@@ -116,11 +118,18 @@ export default function ChatPage() {
         const other = ((members ?? []) as { user_id: string }[]).map((m) => m.user_id).find((uid) => uid !== userId)
         setOtherUserId(other ?? null)
         if (other) {
-          const { data: p } = await supabase.from('profiles').select('username, display_name').eq('id', other).maybeSingle()
-          if (p) conv.name = (p as { display_name: string | null; username: string }).display_name || `@${(p as { username: string }).username}`
+          const { data: p } = await supabase.from('profiles').select('username, display_name, avatar_url, last_seen').eq('id', other).maybeSingle()
+          if (p) {
+            const prof = p as { display_name: string | null; username: string; avatar_url: string | null; last_seen: string | null }
+            conv.name = prof.display_name || `@${prof.username}`
+            setOtherAvatar(prof.avatar_url)
+            setOtherLastSeen(prof.last_seen)
+          }
         }
       } else {
         setOtherUserId(null)
+        setOtherAvatar(conv.avatar_url)
+        setOtherLastSeen(null)
       }
       setActiveConv(conv)
     }
@@ -158,6 +167,28 @@ export default function ChatPage() {
   const visibleMessages = search.trim()
     ? messages.filter((m) => (m.body ?? '').toLowerCase().includes(search.trim().toLowerCase()))
     : messages
+
+  const lastSeenLabel = (iso: string | null): string => {
+    if (!iso) return 'offline'
+    const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+    if (mins < 1) return 'last seen just now'
+    if (mins < 60) return `last seen ${mins}m ago`
+    const hours = Math.floor(mins / 60)
+    if (hours < 24) return `last seen ${hours}h ago`
+    return `last seen ${new Date(iso).toLocaleDateString()}`
+  }
+
+  const otherOnline = otherUserId ? onlineIds.includes(otherUserId) : false
+  const presenceLabel =
+    typingUsers.length > 0
+      ? null
+      : activeConv?.type === 'direct'
+        ? otherOnline
+          ? 'online'
+          : lastSeenLabel(otherLastSeen)
+        : onlineIds.length > 0
+          ? `${onlineIds.length} online`
+          : 'tap for info'
 
   const completeProfile = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -253,13 +284,20 @@ export default function ChatPage() {
                     <span onClick={(e) => { e.stopPropagation(); setActiveId(null) }} className="md:hidden w-9 h-9 flex items-center justify-center text-gray-600 dark:text-zinc-300 shrink-0" aria-label="Back">
                       <ArrowLeft className="w-6 h-6" />
                     </span>
-                    <span className="w-10 h-10 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center font-bold shrink-0">
-                      {(activeConv?.name ?? '?').slice(0, 1).toUpperCase()}
-                    </span>
+                    {otherAvatar || activeConv?.avatar_url ? (
+                      <img src={(otherAvatar || activeConv?.avatar_url) as string} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <span className="w-10 h-10 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center font-bold shrink-0">
+                        {(activeConv?.name ?? '?').slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
                     <span className="flex-1 min-w-0">
                       <span className="block font-semibold text-[15px] truncate text-gray-900 dark:text-zinc-100">{activeConv?.name ?? '…'}</span>
-                      <span className="block text-xs text-gray-500 dark:text-zinc-400 truncate">
-                        {typingUsers.length > 0 ? <span className="text-brand-600 font-medium typing-dots">{typingUsers.join(', ')} typing<span>•</span><span>•</span><span>•</span></span> : onlineIds.length > 0 ? `${onlineIds.length} online` : 'tap for info'}
+                      <span className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-zinc-400 truncate">
+                        {activeConv?.type === 'direct' && (
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${otherOnline ? 'bg-green-500' : 'bg-gray-300'}`} />
+                        )}
+                        {typingUsers.length > 0 ? <span className="text-brand-600 font-medium typing-dots">{typingUsers.join(', ')} typing<span>•</span><span>•</span><span>•</span></span> : presenceLabel}
                       </span>
                     </span>
                   </button>

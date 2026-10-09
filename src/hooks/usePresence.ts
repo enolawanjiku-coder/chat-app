@@ -16,7 +16,8 @@ export function usePresence(conversationId: string | null) {
     channel
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState()
-        setOnlineIds(Object.keys(state))
+        // exclude self — only OTHER online users
+        setOnlineIds(Object.keys(state).filter((id) => id !== userId))
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
