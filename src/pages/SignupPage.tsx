@@ -41,6 +41,10 @@ export default function SignupPage() {
         },
       })
       if (signUpError) throw signUpError
+      // Supabase hides duplicate emails: same response shape but empty identities + no session
+      if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        throw new Error('This email is already registered — log in with your ORIGINAL password, not a new one.')
+      }
       const userId = data.user?.id
       if (!userId) throw new Error('Signup failed, try logging in')
 

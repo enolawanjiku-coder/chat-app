@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { supabase, missingSupabaseConfig } from '../lib/supabase'
 import { isValidEmail } from '../lib/username'
 
-const BUILD = '23ba594'
+const BUILD = 'loginfix1'
 const CONF_HOST = (() => {
   try {
     return new URL(import.meta.env.VITE_SUPABASE_URL as string).hostname
