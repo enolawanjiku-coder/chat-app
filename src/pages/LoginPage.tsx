@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import { supabase, missingSupabaseConfig } from '../lib/supabase'
 import { isValidEmail } from '../lib/username'
 
-const BUILD = 'loginfix1'
+const BUILD = 'loginfix2'
 const CONF_HOST = (() => {
   try {
     return new URL(import.meta.env.VITE_SUPABASE_URL as string).hostname
@@ -20,6 +20,18 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [showPw, setShowPw] = useState(false)
+  const [authState, setAuthState] = useState<string>('checking…')
+
+  // live session indicator — proves whether sign-in actually sticks
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setAuthState(data.session ? `signed in as ${data.session.user.email}` : 'signed out')
+    })
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthState(session ? `signed in as ${session.user.email}` : 'signed out')
+    })
+    return () => sub.subscription.unsubscribe()
+  }, [])
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,6 +50,12 @@ export default function LoginPage() {
         password: cleanPassword,
       })
       if (error) throw error
+      // verify the session actually persisted before leaving — if storage is
+      // blocked the user would otherwise bounce straight back to login
+      const { data: check } = await supabase.auth.getSession()
+      if (!check.session) {
+        throw new Error('Signed in but the session could not be saved — your browser may be blocking site storage (cookies/site data). Allow storage for this site and try again.')
+      }
       navigate('/')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Login failed'
@@ -72,6 +90,7 @@ export default function LoginPage() {
         </button>
         <p className="text-sm text-center text-gray-500">No account? <Link className="text-brand-600 font-semibold" to="/signup">Sign up</Link></p>
         <p className="text-[10px] text-center text-gray-300">build {BUILD} · {missingSupabaseConfig ? 'NOT CONFIGURED' : CONF_HOST}</p>
+        <p className="text-[10px] text-center text-gray-300">session: {authState}</p>
       </form>
     </div>
   )

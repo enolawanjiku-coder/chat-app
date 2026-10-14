@@ -61,7 +61,8 @@ const persistentStorage = {
 export const supabase = createClient(url ?? '', anon ?? '', {
   auth: {
     storage: persistentStorage,
-    storageKey: 'sc-auth',
+    // NOTE: intentionally no custom storageKey — the default key keeps sessions
+    // shared across all app versions/builds instead of fragmenting them.
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,

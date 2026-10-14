@@ -23,6 +23,21 @@ import { CallOverlay } from '../components/CallOverlay'
 import { CallHistory } from '../components/CallHistory'
 import { SettingsDrawer } from '../components/SettingsDrawer'
 
+function SplashGate() {
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), 8000)
+    return () => clearTimeout(t)
+  }, [])
+  return (
+    <div className="h-dvh flex flex-col items-center justify-center gap-3 bg-brand-600 px-6 text-center">
+      <img src="/logo.jpg" className="w-16 h-16 rounded-full object-cover" alt="" />
+      <div className="w-8 h-8 rounded-full border-4 border-white/30 border-t-white animate-spin" />
+      {slow && <p className="text-white/90 text-sm max-w-xs">Still loading… check your connection, then reload. If this repeats, clear the app's site data.</p>}
+    </div>
+  )
+}
+
 export default function ChatPage() {
   const navigate = useNavigate()
   const userId = useAuthStore((s) => s.userId)
@@ -218,12 +233,7 @@ export default function ChatPage() {
   const showChatOnMobile = !!activeId
 
   if (!hydrated) {
-    return (
-      <div className="h-dvh flex flex-col items-center justify-center gap-3 bg-brand-600">
-        <img src="/logo.jpg" className="w-16 h-16 rounded-full object-cover" alt="" />
-        <div className="w-8 h-8 rounded-full border-4 border-white/30 border-t-white animate-spin" />
-      </div>
-    )
+    return <SplashGate />
   }
 
   if (missingSupabaseConfig) {
