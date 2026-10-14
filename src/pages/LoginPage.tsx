@@ -24,18 +24,26 @@ export default function LoginPage() {
   const [authState, setAuthState] = useState<string>('checking…')
   const [authTrail, setAuthTrail] = useState<string[]>([])
 
-  // live session indicator — proves whether sign-in actually sticks
+  // live session indicator — proves whether sign-in actually sticks.
+  // If a session is already active, leave login immediately: sitting on the
+  // form while signed in is exactly the "button does nothing" state.
   useEffect(() => {
     setAuthTrail(readAuthLog())
     supabase.auth.getSession().then(({ data }) => {
-      setAuthState(data.session ? `signed in as ${data.session.user.email}` : 'signed out')
+      if (data.session) {
+        authLog('login-page: session active, leaving')
+        navigate('/')
+        return
+      }
+      setAuthState('signed out')
     })
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthState(session ? `signed in as ${session.user.email}` : 'signed out')
       setAuthTrail(readAuthLog())
+      if (session) navigate('/')
     })
     return () => sub.subscription.unsubscribe()
-  }, [])
+  }, [navigate])
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()

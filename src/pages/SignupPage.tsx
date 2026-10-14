@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -6,6 +6,11 @@ import { isValidEmail, isValidUsername, normalizeUsername } from '../lib/usernam
 
 export default function SignupPage() {
   const navigate = useNavigate()
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) navigate('/')
+    })
+  }, [navigate])
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
