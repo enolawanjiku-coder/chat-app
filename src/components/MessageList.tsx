@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Check, CheckCheck, Lock } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Check, CheckCheck, Lock, Pause, Play } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Message } from '../lib/types'
 import { useAuthStore } from '../store/authStore'
@@ -20,6 +20,45 @@ function ImageBubble({ path, onOpen }: { path: string; onOpen: (url: string) => 
       className="rounded-xl max-w-60 max-h-72 object-cover cursor-zoom-in"
       onClick={() => onOpen(url)}
     />
+  )
+}
+
+function AudioBubble({ path, mine }: { path: string; mine: boolean }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [playing, setPlaying] = useState(false)
+  const audioRef = useRef<HTMLAudioElement>(null)
+  useEffect(() => {
+    supabase.storage.from('chat-images').createSignedUrl(path, 3600).then(({ data }) => {
+      setUrl(data?.signedUrl ?? null)
+    })
+  }, [path])
+  const toggle = () => {
+    const el = audioRef.current
+    if (!el) return
+    if (el.paused) void el.play()
+    else el.pause()
+  }
+  if (!url) return <div className="w-44 h-10 rounded-full bg-black/10 animate-pulse" />
+  return (
+    <div className="flex items-center gap-2 py-1 min-w-44">
+      <button
+        onClick={toggle}
+        aria-label={playing ? 'Pause' : 'Play'}
+        className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${mine ? 'bg-brand-600 text-white' : 'bg-gray-900 dark:bg-zinc-700 text-white'}`}
+      >
+        {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+      </button>
+      <audio
+        ref={audioRef}
+        src={url}
+        preload="metadata"
+        className="w-36 h-8"
+        controls
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => setPlaying(false)}
+      />
+    </div>
   )
 }
 
@@ -155,7 +194,7 @@ export function MessageList({
                 )}
                 {quoted && (
                   <div className={`text-xs rounded-lg px-2 py-1 mb-1 border-l-4 ${mine ? 'bg-black/5 border-brand-500' : 'bg-black/5 dark:bg-white/10 border-gray-300'}`}>
-                    {quoted.deleted_at ? <em className="opacity-60">deleted</em> : quoted.type === 'image' ? 'Photo' : (quoted.body ?? '').slice(0, 120)}
+                    {quoted.deleted_at ? <em className="opacity-60">deleted</em> : quoted.type === 'image' ? 'Photo' : quoted.type === 'audio' ? 'Voice note' : (quoted.body ?? '').slice(0, 120)}
                   </div>
                 )}
                 {m.deleted_at ? (
@@ -167,6 +206,8 @@ export function MessageList({
                   </div>
                 ) : m.type === 'image' && m.image_path ? (
                   <div className="py-1"><ImageBubble path={m.image_path} onOpen={setLightbox} /></div>
+                ) : m.type === 'audio' && m.audio_path ? (
+                  <AudioBubble path={m.audio_path} mine={mine} />
                 ) : (
                   <p className="whitespace-pre-wrap break-words px-1">{m.body}</p>
                 )}
