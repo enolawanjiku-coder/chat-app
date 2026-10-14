@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Eye, EyeOff } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { isValidEmail, isValidUsername, normalizeUsername } from '../lib/username'
 
@@ -12,6 +13,7 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [showPw, setShowPw] = useState(false)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -19,6 +21,8 @@ export default function SignupPage() {
     setInfo(null)
     const cleanEmail = email.trim().toLowerCase()
     const uname = normalizeUsername(username)
+    // trim accidental leading/trailing spaces from copy-paste (must match login)
+    const cleanPassword = password.trim()
     if (!isValidEmail(cleanEmail)) {
       setError('Enter a valid email address')
       return
@@ -27,7 +31,7 @@ export default function SignupPage() {
       setError('Username must be 3-20 chars: a-z, 0-9, _')
       return
     }
-    if (password.length < 8) {
+    if (cleanPassword.length < 8) {
       setError('Password must be at least 8 characters')
       return
     }
@@ -35,7 +39,7 @@ export default function SignupPage() {
     try {
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: cleanEmail,
-        password,
+        password: cleanPassword,
         options: {
           data: { username: uname, display_name: displayName || uname },
         },
@@ -98,7 +102,12 @@ export default function SignupPage() {
         <input className="w-full border border-black/10 rounded-2xl px-4 py-3 text-[15px] outline-none focus:ring-2 focus:ring-brand-200" type="email" inputMode="email" autoComplete="email" placeholder="Email address" value={email} onChange={(e) => setEmail(e.target.value)} />
         <input className="w-full border border-black/10 rounded-2xl px-4 py-3 text-[15px] outline-none focus:ring-2 focus:ring-brand-200" placeholder="username (a-z 0-9 _)" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} />
         <input className="w-full border border-black/10 rounded-2xl px-4 py-3 text-[15px] outline-none focus:ring-2 focus:ring-brand-200" placeholder="Display name" autoComplete="nickname" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-        <input className="w-full border border-black/10 rounded-2xl px-4 py-3 text-[15px] outline-none focus:ring-2 focus:ring-brand-200" type="password" autoComplete="new-password" placeholder="Password (min 8)" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <div className="relative">
+          <input className="w-full border border-black/10 rounded-2xl px-4 py-3 pr-12 text-[15px] outline-none focus:ring-2 focus:ring-brand-200" type={showPw ? 'text' : 'password'} autoComplete="new-password" placeholder="Password (min 8)" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <button type="button" onClick={() => setShowPw((s) => !s)} aria-label="Show password" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+            {showPw ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+          </button>
+        </div>
         <button disabled={busy} className="w-full bg-brand-500 hover:bg-brand-600 active:scale-[0.99] text-white rounded-2xl py-3 font-semibold disabled:opacity-50 transition">
           {busy ? 'Creating…' : 'Sign up'}
         </button>
