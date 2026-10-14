@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckCheck, Lock } from 'lucide-react'
+import { Check, CheckCheck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Message } from '../lib/types'
 import { useAuthStore } from '../store/authStore'
@@ -40,6 +40,9 @@ export function MessageList({
   onReply,
   wallpaper,
   dark,
+  peerLastRead,
+  peerOnline,
+  isDirect,
 }: {
   messages: Message[]
   onLoadMore: () => void
@@ -49,6 +52,9 @@ export function MessageList({
   onReply: (m: Message | null) => void
   wallpaper: string | null
   dark: boolean
+  peerLastRead: string | null
+  peerOnline: boolean
+  isDirect: boolean
 }) {
   const userId = useAuthStore((s) => s.userId)
   const [lightbox, setLightbox] = useState<string | null>(null)
@@ -169,7 +175,15 @@ export function MessageList({
                     {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     {m.edited_at ? ' · edited' : ''}
                   </span>
-                  {mine && !m.deleted_at && <CheckCheck className="w-3.5 h-3.5 text-sky-500" />}
+                  {mine && !m.deleted_at && isDirect && (
+                    peerLastRead && peerLastRead >= m.created_at ? (
+                      <span title="Read"><CheckCheck className="w-4 h-4 text-sky-500" /></span>
+                    ) : peerOnline ? (
+                      <span title="Delivered"><CheckCheck className="w-4 h-4 text-gray-400" /></span>
+                    ) : (
+                      <span title="Sent"><Check className="w-4 h-4 text-gray-400" /></span>
+                    )
+                  )}
                 </div>
                 {!m.deleted_at && <MessageReactions messageId={m.id} mine={mine} />}
                 {!m.deleted_at && (

@@ -70,6 +70,7 @@ export default function ChatPage() {
   const [otherUserId, setOtherUserId] = useState<string | null>(null)
   const [otherAvatar, setOtherAvatar] = useState<string | null>(null)
   const [otherLastSeen, setOtherLastSeen] = useState<string | null>(null)
+  const [peerLastRead, setPeerLastRead] = useState<string | null>(null)
   const [notifOn, setNotifOn] = useState(typeof Notification !== 'undefined' && Notification.permission === 'granted')
   const [muted, setMutedState] = useState(isMuted())
   const { incoming, active, callError, startCall, acceptCall, declineCall, endCall } = useCalls()
@@ -152,9 +153,11 @@ export default function ChatPage() {
         return
       }
       if (conv.type === 'direct' && !conv.name) {
-        const { data: members } = await supabase.from('conversation_members').select('user_id').eq('conversation_id', activeId)
-        const other = ((members ?? []) as { user_id: string }[]).map((m) => m.user_id).find((uid) => uid !== userId)
+        const { data: members } = await supabase.from('conversation_members').select('user_id, last_read_at').eq('conversation_id', activeId)
+        const rows = (members ?? []) as { user_id: string; last_read_at: string }[]
+        const other = rows.map((m) => m.user_id).find((uid) => uid !== userId)
         setOtherUserId(other ?? null)
+        setPeerLastRead(rows.find((m) => m.user_id === other)?.last_read_at ?? null)
         if (other) {
           const { data: p } = await supabase.from('profiles').select('username, display_name, avatar_url, last_seen').eq('id', other).maybeSingle()
           if (p) {
@@ -168,6 +171,7 @@ export default function ChatPage() {
         setOtherUserId(null)
         setOtherAvatar(conv.avatar_url)
         setOtherLastSeen(null)
+        setPeerLastRead(null)
       }
       setActiveConv(conv)
     }
@@ -178,6 +182,22 @@ export default function ChatPage() {
     if (!activeId || !userId) return
     supabase.from('conversation_members').update({ last_read_at: new Date().toISOString() }).eq('conversation_id', activeId).eq('user_id', userId).then(() => setRefreshKey((k) => k + 1))
   }, [activeId, userId, messages.length])
+
+  // live-update read ticks when the other person reads (their last_read_at changes)
+  useEffect(() => {
+    if (!activeId) return
+    const channel = supabase
+      .channel(`read:${activeId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'conversation_members', filter: `conversation_id=eq.${activeId}` },
+        () => setRefreshKey((k) => k + 1),
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [activeId])
 
   useEffect(() => {
     const channel = supabase.channel('chat-page-bump').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
@@ -368,7 +388,7 @@ export default function ChatPage() {
                 <div className="px-3 py-1 bg-[#f0f2f5] dark:bg-[#1f2c34] shrink-0">
                   <input className="w-full text-sm rounded-full px-3.5 py-1.5 outline-none bg-white dark:bg-[#2a3942] dark:text-zinc-100 placeholder:text-gray-400" placeholder="Search messages…" value={search} onChange={(e) => setSearch(e.target.value)} />
                 </div>
-                <MessageList messages={visibleMessages} onLoadMore={loadMore} hasMore={hasMore && !search} loadingMore={loadingMore} replyTo={replyTo} onReply={setReplyTo} wallpaper={wallpaperSrc(wallpaperId)} dark={dark} />
+                <MessageList messages={visibleMessages} onLoadMore={loadMore} hasMore={hasMore && !search} loadingMore={loadingMore} replyTo={replyTo} onReply={setReplyTo} wallpaper={wallpaperSrc(wallpaperId)} dark={dark} peerLastRead={peerLastRead} peerOnline={otherOnline} isDirect={activeConv?.type === 'direct'} />
                 <MessageComposer conversationId={activeId} replyTo={replyTo} onReply={setReplyTo} onSent={() => setRefreshKey((k) => k + 1)} />
               </>
             )}
