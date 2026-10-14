@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import imageCompression from 'browser-image-compression'
-import { Mic, Plus, SendHorizontal, Trash2, X } from 'lucide-react'
+import { Camera, Images, Mic, Plus, SendHorizontal, Trash2, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { playSend } from '../lib/sounds'
 import { useAuthStore } from '../store/authStore'
@@ -34,6 +34,7 @@ export function MessageComposer({
   const [body, setBody] = useState('')
   const [sending, setSending] = useState(false)
   const [failed, setFailed] = useState(false)
+  const [attachOpen, setAttachOpen] = useState(false)
   const { sendTyping } = useTyping(conversationId, profile?.username ?? '')
 
   // voice recording
@@ -248,14 +249,50 @@ export function MessageComposer({
         </div>
       ) : (
       <form onSubmit={sendText} className="flex items-end gap-1.5">
-        <label className="cursor-pointer w-11 h-11 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-gray-500 dark:text-zinc-300" title="Send photo">
-          <Plus className="w-6 h-6" />
-          <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f) void sendImage(f)
-            e.target.value = ''
-          }} />
-        </label>
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setAttachOpen((o) => !o)}
+            aria-label="Attach photo"
+            title="Send photo"
+            className="w-11 h-11 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-gray-500 dark:text-zinc-300"
+          >
+            <Plus className="w-6 h-6" />
+          </button>
+          {attachOpen && (
+            <div className="absolute bottom-12 left-0 bg-white dark:bg-zinc-800 shadow-xl rounded-2xl p-1.5 w-48 z-20 border border-black/5 dark:border-white/10">
+              <label className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer text-sm dark:text-zinc-100">
+                <Camera className="w-5 h-5 text-brand-500" /> Take photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    setAttachOpen(false)
+                    if (f) void sendImage(f)
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+              <label className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer text-sm dark:text-zinc-100">
+                <Images className="w-5 h-5 text-brand-500" /> Gallery
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    setAttachOpen(false)
+                    if (f) void sendImage(f)
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+            </div>
+          )}
+        </div>
         <input
           className="flex-1 rounded-full px-4 py-2.5 text-[15px] outline-none bg-white dark:bg-[#2a3942] text-gray-900 dark:text-zinc-100 placeholder:text-gray-400 shadow-sm"
           placeholder="Message"
