@@ -96,7 +96,7 @@ export function MessageList({
       id="message-scroll"
       style={wallpaper ? { backgroundImage: `url(${wallpaper})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
     >
-      {wallpaper && <div className="absolute inset-0 bg-white/80 dark:bg-[#0b141a]/80 pointer-events-none" />}
+      {wallpaper && <div className="absolute inset-0 wallpaper-dim pointer-events-none" />}
       <div className="relative px-3 sm:px-8 py-3 space-y-1">
       {hasMore && (
         <div className="flex justify-center mb-2">
