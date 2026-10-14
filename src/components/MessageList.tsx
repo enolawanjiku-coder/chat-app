@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Check, CheckCheck } from 'lucide-react'
+import { Check, CheckCheck, Lock } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Message } from '../lib/types'
 import { useAuthStore } from '../store/authStore'
