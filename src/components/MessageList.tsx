@@ -39,6 +39,7 @@ export function MessageList({
   replyTo,
   onReply,
   wallpaper,
+  dark,
 }: {
   messages: Message[]
   onLoadMore: () => void
@@ -47,6 +48,7 @@ export function MessageList({
   replyTo: Message | null
   onReply: (m: Message | null) => void
   wallpaper: string | null
+  dark: boolean
 }) {
   const userId = useAuthStore((s) => s.userId)
   const [lightbox, setLightbox] = useState<string | null>(null)
@@ -92,12 +94,21 @@ export function MessageList({
 
   return (
     <div
-      className={`flex-1 overflow-y-auto nice-scroll relative ${wallpaper ? '' : 'chat-wallpaper'}`}
+      className={`flex-1 overflow-y-auto nice-scroll ${wallpaper ? '' : 'chat-wallpaper'}`}
       id="message-scroll"
-      style={wallpaper ? { backgroundImage: `url(${wallpaper})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
+      style={
+        wallpaper
+          ? {
+              // dim baked into the background itself so it covers the whole
+              // scroll area — an overlay div would end mid-scroll and split the screen
+              backgroundImage: `linear-gradient(${dark ? 'rgba(11,20,26,0.85), rgba(11,20,26,0.85)' : 'rgba(255,255,255,0.82), rgba(255,255,255,0.82)'}), url(${wallpaper})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }
+          : undefined
+      }
     >
-      {wallpaper && <div className="absolute inset-0 wallpaper-dim pointer-events-none" />}
-      <div className="relative px-3 sm:px-8 py-3 space-y-1">
+      <div className="px-3 sm:px-8 py-3 space-y-1">
       {hasMore && (
         <div className="flex justify-center mb-2">
           <button onClick={onLoadMore} disabled={loadingMore} className="text-xs font-medium bg-white dark:bg-zinc-800 shadow rounded-full px-4 py-1.5 text-brand-600 disabled:opacity-40">
