@@ -94,7 +94,9 @@ export function StatusRow({ onChanged }: { onChanged: () => void }) {
   }
 
   useEffect(() => {
-    load()
+    // deferred so the chat list paints first on slow phones
+    const t = setTimeout(load, 900)
+    return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

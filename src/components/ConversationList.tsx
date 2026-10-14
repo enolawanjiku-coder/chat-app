@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MessageCircle, Users } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
@@ -33,15 +33,19 @@ export function ConversationList({
   const userId = useAuthStore((s) => s.userId)
   const [conversations, setConversations] = useState<ConversationPreview[]>([])
   const [loading, setLoading] = useState(true)
+  const firstLoad = useRef(true)
 
   useEffect(() => {
     if (!userId) return
+    let cancelled = false
     const fetchConvs = async () => {
-      setLoading(true)
+      // skeleton only on first paint — background refreshes stay silent (no flicker)
+      if (firstLoad.current) setLoading(true)
       const { data: memberships } = await supabase
         .from('conversation_members')
         .select('conversation_id, last_read_at')
         .eq('user_id', userId)
+      if (cancelled) return
       const ids = (memberships ?? []).map((m) => m.conversation_id)
       const readMap = new Map((memberships ?? []).map((m) => [m.conversation_id, m.last_read_at]))
       if (ids.length === 0) {
@@ -49,11 +53,16 @@ export function ConversationList({
         setLoading(false)
         return
       }
-      const { data: convs } = await supabase.from('conversations').select('*').in('id', ids)
-      const { data: allMembers } = await supabase.from('conversation_members').select('conversation_id, user_id').in('conversation_id', ids)
+      // base queries in parallel
+      const [convsRes, membersRes] = await Promise.all([
+        supabase.from('conversations').select('*').in('id', ids),
+        supabase.from('conversation_members').select('conversation_id, user_id').in('conversation_id', ids),
+      ])
+      if (cancelled) return
+      const convs = (convsRes.data ?? []) as Conversation[]
       const otherIds = new Set<string>()
       const membersByConv = new Map<string, string[]>()
-      for (const m of (allMembers ?? []) as { conversation_id: string; user_id: string }[]) {
+      for (const m of ((membersRes.data ?? []) as { conversation_id: string; user_id: string }[])) {
         const list = membersByConv.get(m.conversation_id) ?? []
         list.push(m.user_id)
         membersByConv.set(m.conversation_id, list)
@@ -62,6 +71,7 @@ export function ConversationList({
       const { data: others } = otherIds.size
         ? await supabase.from('profiles').select('id, username, display_name, avatar_url').in('id', [...otherIds])
         : { data: [] as { id: string; username: string; display_name: string | null; avatar_url: string | null }[] }
+      if (cancelled) return
       const otherMap = new Map(((others ?? []) as { id: string; username: string; display_name: string | null; avatar_url: string | null }[]).map((p) => [p.id, p]))
       const titleFor = (c: Conversation): string => {
         if (c.type === 'group') return c.name ?? 'Group'
@@ -69,48 +79,64 @@ export function ConversationList({
         const p = other ? otherMap.get(other) : undefined
         return p ? (p.display_name || `@${p.username}`) : 'Direct chat'
       }
-      const previews: ConversationPreview[] = []
-      for (const c of (convs ?? []) as Conversation[]) {
-        const { data: last } = await supabase
-          .from('messages')
-          .select('body, type, created_at')
-          .eq('conversation_id', c.id)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-        const lastRead = readMap.get(c.id) as string | undefined
-        let unread = 0
-        if (last?.created_at) {
-          const { count } = await supabase
+      const avatarFor = (c: Conversation): string | null => {
+        if (c.type !== 'direct') return c.avatar_url
+        const other = (membersByConv.get(c.id) ?? []).find((uid) => uid !== userId)
+        return (other && otherMap.get(other)?.avatar_url) || null
+      }
+      // paint rows instantly, enrich previews as they arrive
+      const base = convs.map((c) => ({
+        ...c,
+        last_body: null as string | null,
+        last_type: null as string | null,
+        last_at: null as string | null,
+        unread: 0,
+        title: titleFor(c),
+        avatar: avatarFor(c),
+      }))
+      setConversations(base)
+      setLoading(false)
+      firstLoad.current = false
+      // per-chat previews in parallel (was sequential: 2 roundtrips per chat)
+      const enriched = await Promise.all(
+        base.map(async (c) => {
+          const { data: last } = await supabase
             .from('messages')
-            .select('*', { count: 'exact', head: true })
+            .select('body, type, created_at')
             .eq('conversation_id', c.id)
             .is('deleted_at', null)
-            .gt('created_at', lastRead ?? '1970-01-01')
-            .neq('sender_id', userId)
-          unread = count ?? 0
-        }
-        previews.push({
-          ...c,
-          last_body: last?.body ?? (last?.type === 'image' ? 'Photo' : null),
-          last_type: last?.type ?? null,
-          last_at: last?.created_at ?? null,
-          unread,
-          title: titleFor(c),
-          avatar: c.type === 'direct'
-            ? (() => {
-                const other = (membersByConv.get(c.id) ?? []).find((uid) => uid !== userId)
-                return (other && otherMap.get(other)?.avatar_url) || null
-              })()
-            : c.avatar_url,
-        })
-      }
-      previews.sort((a, b) => (b.last_at ?? '').localeCompare(a.last_at ?? ''))
-      setConversations(previews)
-      setLoading(false)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          let unread = 0
+          if (last?.created_at) {
+            const { count } = await supabase
+              .from('messages')
+              .select('*', { count: 'exact', head: true })
+              .eq('conversation_id', c.id)
+              .is('deleted_at', null)
+              .gt('created_at', readMap.get(c.id) ?? '1970-01-01')
+              .neq('sender_id', userId)
+            unread = count ?? 0
+          }
+          return {
+            ...c,
+            last_body: last?.body ?? (last?.type === 'image' ? 'Photo' : null),
+            last_type: last?.type ?? null,
+            last_at: last?.created_at ?? null,
+            unread,
+          }
+        }),
+      )
+      if (cancelled) return
+      enriched.sort((a, b) => (b.last_at ?? '').localeCompare(a.last_at ?? ''))
+      setConversations(enriched)
+      firstLoad.current = false
     }
     fetchConvs()
+    return () => {
+      cancelled = true
+    }
   }, [userId, refreshKey, selectedId])
 
   const timeLabel = (iso: string | null): string => {

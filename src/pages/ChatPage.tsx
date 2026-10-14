@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Menu, Phone, Video } from 'lucide-react'
 import { supabase, missingSupabaseConfig } from '../lib/supabase'
@@ -18,11 +18,13 @@ import { ConversationList } from '../components/ConversationList'
 import { MessageList } from '../components/MessageList'
 import { MessageComposer } from '../components/MessageComposer'
 import { NewChatDialog } from '../components/NewChatDialog'
-import { GroupInfo } from '../components/GroupInfo'
 import { StatusRow } from '../components/StatusRow'
-import { CallOverlay } from '../components/CallOverlay'
 import { CallHistory } from '../components/CallHistory'
-import { SettingsDrawer } from '../components/SettingsDrawer'
+
+// heavy below-fold overlays load after first paint (smaller initial bundle on phones)
+const CallOverlay = lazy(() => import('../components/CallOverlay').then((m) => ({ default: m.CallOverlay })))
+const GroupInfo = lazy(() => import('../components/GroupInfo').then((m) => ({ default: m.GroupInfo })))
+const SettingsDrawer = lazy(() => import('../components/SettingsDrawer').then((m) => ({ default: m.SettingsDrawer })))
 
 function SplashGate() {
   const [slow, setSlow] = useState(false)
@@ -356,7 +358,9 @@ export default function ChatPage() {
           </div>
           {showInfo && activeConv && (
             <div className={`${showChatOnMobile ? 'hidden md:block' : 'block'} shrink-0`}>
-              <GroupInfo conversation={activeConv} onClose={() => setShowInfo(false)} onChanged={() => { setRefreshKey((k) => k + 1); setActiveId(null) }} />
+              <Suspense fallback={null}>
+                <GroupInfo conversation={activeConv} onClose={() => setShowInfo(false)} onChanged={() => { setRefreshKey((k) => k + 1); setActiveId(null) }} />
+              </Suspense>
             </div>
           )}
         </main>
@@ -366,7 +370,10 @@ export default function ChatPage() {
           {callError}
         </div>
       )}
-      <CallOverlay incoming={incoming} active={active} onAccept={acceptCall} onDecline={declineCall} onEnd={() => endCall()} />
+      <Suspense fallback={null}>
+        <CallOverlay incoming={incoming} active={active} onAccept={acceptCall} onDecline={declineCall} onEnd={() => endCall()} />
+      </Suspense>
+      <Suspense fallback={null}>
       <SettingsDrawer
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -380,6 +387,7 @@ export default function ChatPage() {
         onPickWallpaper={pickWallpaper}
         onLogout={logout}
       />
+      </Suspense>
     </div>
   )
 }
