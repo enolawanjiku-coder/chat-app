@@ -27,12 +27,15 @@ export default function LoginPage() {
   // live session indicator — proves whether sign-in actually sticks.
   // If a session is already active, leave login immediately: sitting on the
   // form while signed in is exactly the "button does nothing" state.
+  // replace:true keeps history clean so the back button can't ping-pong.
   useEffect(() => {
     setAuthTrail(readAuthLog())
+    let gone = false
     supabase.auth.getSession().then(({ data }) => {
+      if (gone) return
       if (data.session) {
         authLog('login-page: session active, leaving')
-        navigate('/')
+        navigate('/', { replace: true })
         return
       }
       setAuthState('signed out')
@@ -40,9 +43,12 @@ export default function LoginPage() {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthState(session ? `signed in as ${session.user.email}` : 'signed out')
       setAuthTrail(readAuthLog())
-      if (session) navigate('/')
+      if (session) navigate('/', { replace: true })
     })
-    return () => sub.subscription.unsubscribe()
+    return () => {
+      gone = true
+      sub.subscription.unsubscribe()
+    }
   }, [navigate])
 
   const submit = async (e: React.FormEvent) => {
@@ -70,7 +76,7 @@ export default function LoginPage() {
       if (!check.session) {
         throw new Error('Signed in but the session could not be saved — your browser may be blocking site storage (cookies/site data). Allow storage for this site and try again.')
       }
-      navigate('/')
+      navigate('/', { replace: true })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Login failed'
       if (msg.toLowerCase().includes('not confirmed') || msg.toLowerCase().includes('confirm')) {

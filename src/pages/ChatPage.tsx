@@ -116,9 +116,21 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!hydrated) return
-    if (!userId) {
-      authLog('redirect-to-login (hydrated, no user)')
-      navigate('/login')
+    if (userId) return
+    // double-check storage before leaving: never bounce on a transient empty state
+    let gone = false
+    supabase.auth.getSession().then(({ data }) => {
+      if (gone) return
+      if (!data.session) {
+        authLog('redirect-to-login (hydrated, no user, no session)')
+        navigate('/login', { replace: true })
+      } else {
+        authLog('gate: session exists, staying')
+        useAuthStore.getState().setAuth(data.session.user.id, useAuthStore.getState().profile)
+      }
+    })
+    return () => {
+      gone = true
     }
   }, [navigate, hydrated, userId])
 

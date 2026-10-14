@@ -25,7 +25,7 @@ export default function JoinPage() {
         return
       }
       setActiveId(id)
-      navigate('/')
+      navigate('/', { replace: true })
     }
     join()
   }, [id, userId, navigate, setActiveId])

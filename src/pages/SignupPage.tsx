@@ -8,7 +8,7 @@ export default function SignupPage() {
   const navigate = useNavigate()
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate('/')
+      if (data.session) navigate('/', { replace: true })
     })
   }, [navigate])
   const [email, setEmail] = useState('')
@@ -79,7 +79,7 @@ export default function SignupPage() {
         }
         throw profileError
       }
-      navigate('/')
+      navigate('/', { replace: true })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Signup failed'
       if (msg.toLowerCase().includes('rate limit')) {
