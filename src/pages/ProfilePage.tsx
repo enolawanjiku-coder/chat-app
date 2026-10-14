@@ -121,14 +121,14 @@ export default function ProfilePage() {
         <textarea className="w-full border border-black/10 dark:border-white/10 rounded-xl px-3 py-2 dark:bg-zinc-900 dark:text-white" rows={3} maxLength={300} placeholder="Tell people about yourself…" value={bio} onChange={(e) => setBio(e.target.value)} />
         <button className="bg-brand-500 text-white rounded-full px-5 py-2 text-sm font-semibold">Save</button>
       </form>
-      <div className="bg-white rounded shadow p-4 space-y-2">
-        <h2 className="font-medium">Blocked users</h2>
+      <div className="bg-white dark:bg-zinc-800 rounded-2xl shadow p-4 space-y-2">
+        <h2 className="font-medium dark:text-zinc-100">Blocked users</h2>
         <div className="flex gap-2">
-          <input className="flex-1 border rounded px-2 py-1 text-sm" placeholder="username" value={blockUser} onChange={(e) => setBlockUser(e.target.value)} />
-          <button onClick={block} className="text-sm border rounded px-2">Block</button>
+          <input className="flex-1 border border-black/10 dark:border-white/10 rounded-full px-3 py-1.5 text-sm bg-transparent dark:text-zinc-100" placeholder="username" value={blockUser} onChange={(e) => setBlockUser(e.target.value)} />
+          <button onClick={block} className="text-sm border border-black/10 dark:border-white/20 rounded-full px-3 dark:text-zinc-200">Block</button>
         </div>
         {blocks.map((b) => (
-          <div key={b.blocked_id} className="flex justify-between text-sm">
+          <div key={b.blocked_id} className="flex justify-between text-sm dark:text-zinc-200">
             <span>@{b.username ?? b.blocked_id.slice(0, 6)}</span>
             <button onClick={() => unblock(b.blocked_id)} className="underline text-brand-600">Unblock</button>
           </div>

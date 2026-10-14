@@ -63,7 +63,7 @@ export function MessageReactions({ messageId, mine }: { messageId: string; mine:
           <SmilePlus className="w-3.5 h-3.5" />
         </button>
         {open && (
-          <div className="absolute bottom-5 left-0 bg-white shadow-lg rounded-full px-2 py-1 flex gap-1 z-10 border">
+          <div className="absolute bottom-5 left-0 bg-white dark:bg-zinc-800 shadow-lg rounded-full px-2 py-1 flex gap-1 z-10 border border-black/10 dark:border-white/10">
             {QUICK.map((e) => (
               <button key={e} onClick={() => toggle(e)} className="text-lg hover:scale-125">{e}</button>
             ))}

@@ -31,9 +31,9 @@ export default function JoinPage() {
   }, [id, userId, navigate, setActiveId])
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
-      <div className="bg-white rounded-2xl shadow p-6 text-center space-y-3">
-        <p className="text-sm">{status}</p>
+    <div className="min-h-screen flex items-center justify-center p-6 bg-[#e9e4dc] dark:bg-[#0b141a]">
+      <div className="bg-white dark:bg-zinc-800 rounded-2xl shadow p-6 text-center space-y-3">
+        <p className="text-sm dark:text-zinc-200">{status}</p>
         <Link to="/" className="text-sm text-brand-600 underline">Back to chats</Link>
       </div>
     </div>

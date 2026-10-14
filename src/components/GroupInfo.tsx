@@ -79,18 +79,18 @@ export function GroupInfo({ conversation, onClose, onChanged }: { conversation: 
   }
 
   return (
-    <div className="p-4 space-y-3 bg-white border-l w-72 overflow-y-auto">
+    <div className="p-4 space-y-3 bg-white dark:bg-[#111b21] border-l border-black/5 dark:border-white/5 w-72 overflow-y-auto">
       <div className="flex justify-between items-center">
-        <h2 className="font-bold">{isGroup ? 'Group info' : 'Chat info'}</h2>
-        <button onClick={onClose} aria-label="Close" className="text-gray-500 flex items-center"><X className="w-5 h-5" /></button>
+        <h2 className="font-bold dark:text-zinc-100">{isGroup ? 'Group info' : 'Chat info'}</h2>
+        <button onClick={onClose} aria-label="Close" className="text-gray-500 dark:text-zinc-400 flex items-center"><X className="w-5 h-5" /></button>
       </div>
       {isGroup && (
         <div className="flex gap-2">
-          <input className="flex-1 border rounded px-2 py-1 text-sm" value={groupName} onChange={(e) => setGroupName(e.target.value)} disabled={!canManage} />
-          {canManage && <button onClick={saveName} className="text-sm underline">Save</button>}
+          <input className="flex-1 border border-black/10 dark:border-white/10 rounded px-2 py-1 text-sm bg-transparent dark:text-zinc-100" value={groupName} onChange={(e) => setGroupName(e.target.value)} disabled={!canManage} />
+          {canManage && <button onClick={saveName} className="text-sm underline dark:text-zinc-300">Save</button>}
         </div>
       )}
-      <h3 className="text-sm font-medium">Members ({members.length})</h3>
+      <h3 className="text-sm font-medium dark:text-zinc-200">Members ({members.length})</h3>
       {members.map((m) => (
         <div key={m.user_id} className="flex justify-between items-center text-sm gap-2">
           <span className="flex items-center gap-2 min-w-0">
@@ -101,7 +101,7 @@ export function GroupInfo({ conversation, onClose, onChanged }: { conversation: 
                 {(m.username ?? '?').slice(0, 1).toUpperCase()}
               </span>
             )}
-            <span className="truncate">@{m.username ?? m.user_id.slice(0, 6)} <span className="text-gray-400 text-xs">{m.role}</span></span>
+            <span className="truncate dark:text-zinc-200">@{m.username ?? m.user_id.slice(0, 6)} <span className="text-gray-400 text-xs">{m.role}</span></span>
           </span>
           {canManage && m.user_id !== userId && (
             <button onClick={() => removeMember(m.user_id)} className="text-red-600 text-xs underline">Remove</button>
@@ -110,8 +110,8 @@ export function GroupInfo({ conversation, onClose, onChanged }: { conversation: 
       ))}
       {isGroup && canManage && (
         <div className="flex gap-2 pt-2">
-          <input className="flex-1 border rounded px-2 py-1 text-sm" placeholder="username to add" value={addUsername} onChange={(e) => setAddUsername(e.target.value)} />
-          <button onClick={addMember} className="text-sm bg-gray-900 text-white rounded px-2">Add</button>
+          <input className="flex-1 border border-black/10 dark:border-white/10 rounded px-2 py-1 text-sm bg-transparent dark:text-zinc-100 dark:placeholder:text-zinc-500" placeholder="username to add" value={addUsername} onChange={(e) => setAddUsername(e.target.value)} />
+          <button onClick={addMember} className="text-sm bg-gray-900 dark:bg-zinc-700 text-white rounded px-2">Add</button>
         </div>
       )}
       <button onClick={leave} className="text-sm text-red-600 underline">Leave chat</button>
