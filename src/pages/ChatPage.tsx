@@ -60,7 +60,12 @@ export default function ChatPage() {
   const [setupUsername, setSetupUsername] = useState('')
   const [setupError, setSetupError] = useState<string | null>(null)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
-  const [dark, setDark] = useState(() => localStorage.getItem('sc-theme') === 'dark')
+  const [dark, setDark] = useState(() => {
+    const stored = localStorage.getItem('sc-theme')
+    if (stored) return stored === 'dark'
+    // no saved choice yet: follow the device (computer dark → app dark)
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false
+  })
   const [search, setSearch] = useState('')
   const [otherUserId, setOtherUserId] = useState<string | null>(null)
   const [otherAvatar, setOtherAvatar] = useState<string | null>(null)
