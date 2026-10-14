@@ -12,6 +12,7 @@ import { useCalls } from '../hooks/useCalls'
 import { isMuted, playPop, playTick, setMuted } from '../lib/sounds'
 import { isValidUsername, normalizeUsername } from '../lib/username'
 import { getWallpaper, setWallpaper, wallpaperSrc } from '../lib/wallpapers'
+import { authLog } from '../lib/authlog'
 import type { Conversation, Message } from '../lib/types'
 import { ConversationList } from '../components/ConversationList'
 import { MessageList } from '../components/MessageList'
@@ -113,7 +114,10 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!hydrated) return
-    if (!userId) navigate('/login')
+    if (!userId) {
+      authLog('redirect-to-login (hydrated, no user)')
+      navigate('/login')
+    }
   }, [navigate, hydrated, userId])
 
   useEffect(() => {

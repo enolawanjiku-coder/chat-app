@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import { supabase, missingSupabaseConfig } from '../lib/supabase'
+import { authLog, readAuthLog } from '../lib/authlog'
 import { isValidEmail } from '../lib/username'
 
-const BUILD = 'loginfix2'
+const BUILD = 'loginfix3'
 const CONF_HOST = (() => {
   try {
     return new URL(import.meta.env.VITE_SUPABASE_URL as string).hostname
@@ -21,14 +22,17 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false)
   const [showPw, setShowPw] = useState(false)
   const [authState, setAuthState] = useState<string>('checking…')
+  const [authTrail, setAuthTrail] = useState<string[]>([])
 
   // live session indicator — proves whether sign-in actually sticks
   useEffect(() => {
+    setAuthTrail(readAuthLog())
     supabase.auth.getSession().then(({ data }) => {
       setAuthState(data.session ? `signed in as ${data.session.user.email}` : 'signed out')
     })
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthState(session ? `signed in as ${session.user.email}` : 'signed out')
+      setAuthTrail(readAuthLog())
     })
     return () => sub.subscription.unsubscribe()
   }, [])
@@ -50,9 +54,11 @@ export default function LoginPage() {
         password: cleanPassword,
       })
       if (error) throw error
+      authLog('signin-ok')
       // verify the session actually persisted before leaving — if storage is
       // blocked the user would otherwise bounce straight back to login
       const { data: check } = await supabase.auth.getSession()
+      authLog(`session-check:${check.session ? 'YES' : 'NO'}`)
       if (!check.session) {
         throw new Error('Signed in but the session could not be saved — your browser may be blocking site storage (cookies/site data). Allow storage for this site and try again.')
       }
@@ -91,6 +97,9 @@ export default function LoginPage() {
         <p className="text-sm text-center text-gray-500">No account? <Link className="text-brand-600 font-semibold" to="/signup">Sign up</Link></p>
         <p className="text-[10px] text-center text-gray-300">build {BUILD} · {missingSupabaseConfig ? 'NOT CONFIGURED' : CONF_HOST}</p>
         <p className="text-[10px] text-center text-gray-300">session: {authState}</p>
+        {authTrail.length > 0 && (
+          <p className="text-[10px] text-center text-gray-300 whitespace-pre-line">{authTrail.join('\n')}</p>
+        )}
       </form>
     </div>
   )
