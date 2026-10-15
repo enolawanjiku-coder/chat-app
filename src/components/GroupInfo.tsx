@@ -101,8 +101,12 @@ export function GroupInfo({ conversation, onClose, onChanged }: { conversation: 
           {canManage && <button onClick={saveName} className="text-sm underline dark:text-zinc-300">Save</button>}
         </div>
       )}
-      <h3 className="text-sm font-medium dark:text-zinc-200">Members ({members.length})</h3>
-      {members.map((m) => (
+      {!isGroup && (
+        <p className="text-xs text-gray-500 dark:text-zinc-400 bg-black/5 dark:bg-white/5 rounded-xl px-3 py-2">
+          This is a 1:1 direct chat — members can't be added here. Create a group from ＋ to chat with several people.
+        </p>
+      )}
+      <h3 className="text-sm font-medium dark:text-zinc-200">Members ({members.length})</h3>      {members.map((m) => (
         <div key={m.user_id} className="flex justify-between items-center text-sm gap-2">
           <span className="flex items-center gap-2 min-w-0">
             {m.avatar_url ? (
