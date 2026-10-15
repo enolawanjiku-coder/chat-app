@@ -61,6 +61,17 @@ export function GroupInfo({ conversation, onClose, onChanged }: { conversation: 
     onClose()
   }
 
+  const deleteGroup = async () => {
+    if (!confirm(`Delete "${conversation.name ?? 'this chat'}" for everyone? Messages will be gone permanently.`)) return
+    const { error } = await supabase.from('conversations').delete().eq('id', conversation.id)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    onChanged()
+    onClose()
+  }
+
   const saveName = async () => {
     if (!groupName.trim()) return
     const { error } = await supabase.from('conversations').update({ name: groupName.trim() }).eq('id', conversation.id)
@@ -114,7 +125,10 @@ export function GroupInfo({ conversation, onClose, onChanged }: { conversation: 
           <button onClick={addMember} className="text-sm bg-gray-900 dark:bg-zinc-700 text-white rounded px-2">Add</button>
         </div>
       )}
-      <button onClick={leave} className="text-sm text-red-600 underline">Leave chat</button>
+      <button onClick={leave} className="text-sm text-red-600 underline text-left">Leave chat</button>
+      {canManage && (
+        <button onClick={deleteGroup} className="text-sm text-red-600 font-semibold underline text-left">Delete group for everyone</button>
+      )}
       <button onClick={copyInvite} className="text-sm text-brand-600 underline text-left">Copy invite link</button>
     </div>
   )
