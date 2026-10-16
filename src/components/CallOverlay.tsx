@@ -78,6 +78,48 @@ export function CallOverlay({
 
   if (!active) return null
 
+  // outgoing, still ringing — no timer yet, timer starts on connect
+  if (active.status === 'ringing') {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6">
+        <div className="bg-white dark:bg-zinc-800 rounded-3xl p-6 w-full max-w-xs text-center space-y-4 shadow-2xl">
+          <div className="w-20 h-20 mx-auto rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-3xl font-bold animate-pulse">
+            {active.peerName.slice(0, 1).toUpperCase()}
+          </div>
+          <div>
+            <p className="font-bold text-lg dark:text-white">{active.peerName}</p>
+            <p className="text-sm text-gray-500">Ringing…</p>
+          </div>
+          <div className="flex justify-center">
+            <button onClick={onEnd} aria-label="Cancel call" className="w-14 h-14 rounded-full bg-red-500 text-white shadow active:scale-95 flex items-center justify-center"><PhoneOff className="w-6 h-6" /></button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // connecting or failed — show state, not a running timer
+  if (active.status === 'connecting' || active.status === 'failed') {
+    const failed = active.status === 'failed'
+    return (
+      <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6">
+        <div className="bg-white dark:bg-zinc-800 rounded-3xl p-6 w-full max-w-xs text-center space-y-4 shadow-2xl">
+          <div className="w-20 h-20 mx-auto rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-3xl font-bold">
+            {active.peerName.slice(0, 1).toUpperCase()}
+          </div>
+          <div>
+            <p className="font-bold text-lg dark:text-white">{active.peerName}</p>
+            <p className="text-sm text-gray-500">{failed ? 'Connection failed — their network may block calls. Try voice instead of video.' : 'Connecting…'}</p>
+          </div>
+          {!failed && <div className="w-8 h-8 mx-auto rounded-full border-4 border-gray-200 border-t-brand-500 animate-spin" />}
+          <div className="flex justify-center">
+            <button onClick={onEnd} aria-label="End call" className="w-14 h-14 rounded-full bg-red-500 text-white shadow active:scale-95 flex items-center justify-center"><PhoneOff className="w-6 h-6" /></button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-[#0b141a] flex flex-col">
       {active.video ? (

@@ -19,11 +19,14 @@ export type ActiveCall = {
   peerName: string
   video: boolean
   startedAt: number
+  status: 'ringing' | 'connecting' | 'connected' | 'failed'
   localStream: MediaStream | null
   remoteStream: MediaStream | null
 }
 
-const ICE = { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] }
+const ICE = {
+  iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
+}
 
 export function useCalls() {
   const userId = useAuthStore((s) => s.userId)
@@ -52,6 +55,31 @@ export function useCalls() {
   const send = useCallback((conversationId: string, event: string, payload: Record<string, unknown>) => {
     supabase.channel(`call:${conversationId}`).send({ type: 'broadcast', event, payload })
   }, [])
+
+  // shared peer-connection wiring: tracks, ICE, connection state
+  const wirePc = useCallback(
+    (pc: RTCPeerConnection, remote: MediaStream, conversationId: string, callId: string, to: string | null) => {
+      pc.ontrack = (e) => {
+        e.streams[0]?.getTracks().forEach((t) => remote.addTrack(t))
+        setActive((a) => (a ? { ...a, remoteStream: remote } : a))
+      }
+      pc.onicecandidate = (e) => {
+        if (e.candidate && to) send(conversationId, 'ice', { callId, to, from: userRef.current, candidate: e.candidate.toJSON() })
+      }
+      pc.onconnectionstatechange = () => {
+        const s = pc.connectionState
+        if (s === 'connected') {
+          stopRing()
+          playConnected()
+          setActive((a) => (a && a.callId === callId ? { ...a, status: 'connected', startedAt: Date.now() } : a))
+        } else if (s === 'failed' || s === 'disconnected') {
+          stopRing()
+          setActive((a) => (a && a.callId === callId ? { ...a, status: 'failed' } : a))
+        }
+      }
+    },
+    [send],
+  )
 
   const endCall = useCallback(
     (conversationId?: string, callId?: string) => {
@@ -93,7 +121,7 @@ export function useCalls() {
           const a = activeRef.current
           if (!a || p.callId !== a.callId || p.to !== userRef.current) return
           stopRing()
-          playConnected()
+          setActive((cur) => (cur ? { ...cur, status: 'connecting' } : cur))
           void pcRef.current?.setRemoteDescription(new RTCSessionDescription(p.answer))
         })
         ch.on('broadcast', { event: 'ice' }, ({ payload }) => {
@@ -136,17 +164,11 @@ export function useCalls() {
         pcRef.current = pc
         const callId = crypto.randomUUID()
         const remote = new MediaStream()
-        pc.ontrack = (e) => {
-          e.streams[0]?.getTracks().forEach((t) => remote.addTrack(t))
-          setActive((a) => (a ? { ...a, remoteStream: remote } : a))
-        }
+        wirePc(pc, remote, conversationId, callId, to)
         stream.getTracks().forEach((t) => pc.addTrack(t, stream))
-        pc.onicecandidate = (e) => {
-          if (e.candidate && to) send(conversationId, 'ice', { callId, to, from: userRef.current, candidate: e.candidate.toJSON() })
-        }
         const offer = await pc.createOffer()
         await pc.setLocalDescription(offer)
-        setActive({ callId, conversationId, peerName, video, startedAt: Date.now(), localStream: stream, remoteStream: remote })
+        setActive({ callId, conversationId, peerName, video, startedAt: Date.now(), status: 'ringing', localStream: stream, remoteStream: remote })
         void supabase.from('call_logs').insert({
           call_id: callId,
           conversation_id: conversationId,
@@ -179,7 +201,7 @@ export function useCalls() {
         setTimeout(() => setCallError(null), 4000)
       }
     },
-    [endCall, send, profile],
+    [endCall, send, profile, wirePc],
   )
 
   const acceptCall = useCallback(
@@ -194,20 +216,13 @@ export function useCalls() {
         const pc = new RTCPeerConnection(ICE)
         pcRef.current = pc
         const remote = new MediaStream()
-        pc.ontrack = (e) => {
-          e.streams[0]?.getTracks().forEach((t) => remote.addTrack(t))
-          setActive((a) => (a ? { ...a, remoteStream: remote } : a))
-        }
+        wirePc(pc, remote, inc.conversationId, inc.callId, inc.from)
         stream.getTracks().forEach((t) => pc.addTrack(t, stream))
-        pc.onicecandidate = (e) => {
-          if (e.candidate) send(inc.conversationId, 'ice', { callId: inc.callId, to: inc.from, from: userRef.current, candidate: e.candidate.toJSON() })
-        }
         await pc.setRemoteDescription(new RTCSessionDescription(inc.offer))
         const answer = await pc.createAnswer()
         await pc.setLocalDescription(answer)
-        setActive({ callId: inc.callId, conversationId: inc.conversationId, peerName: inc.fromName, video, startedAt: Date.now(), localStream: stream, remoteStream: remote })
+        setActive({ callId: inc.callId, conversationId: inc.conversationId, peerName: inc.fromName, video, startedAt: Date.now(), status: 'connecting', localStream: stream, remoteStream: remote })
         setIncoming(null)
-        playConnected()
         void supabase.from('call_logs').update({ status: 'accepted' }).eq('call_id', inc.callId)
         send(inc.conversationId, 'answer', { callId: inc.callId, to: inc.from, from: userRef.current, answer })
       } catch {
@@ -215,7 +230,7 @@ export function useCalls() {
         setTimeout(() => setCallError(null), 4000)
       }
     },
-    [send],
+    [send, wirePc],
   )
 
   const declineCall = useCallback(() => {
