@@ -29,7 +29,7 @@ export type Message = {
   id: string
   conversation_id: string
   sender_id: string
-  type: 'text' | 'image' | 'audio' | 'system'
+  type: 'text' | 'image' | 'audio' | 'system' | 'sticker'
   body: string | null
   image_path: string | null
   audio_path: string | null

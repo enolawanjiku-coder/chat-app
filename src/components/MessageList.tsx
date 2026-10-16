@@ -23,8 +23,7 @@ function ImageBubble({ path, onOpen }: { path: string; onOpen: (url: string) => 
   )
 }
 
-function AudioBubble({ path, mine }: { path: string; mine: boolean }) {
-  const [url, setUrl] = useState<string | null>(null)
+function AudioBubble({ path, mine }: { path: string; mine: boolean }) {  const [url, setUrl] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
   useEffect(() => {
@@ -68,6 +67,21 @@ function senderColor(id: string): string {
   let h = 0
   for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0
   return SENDER_COLORS[h % SENDER_COLORS.length]
+}
+
+function StickerView({ message }: { message: Message }) {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (message.image_path) {
+      const { data } = supabase.storage.from('stickers').getPublicUrl(message.image_path)
+      setUrl(data.publicUrl)
+    }
+  }, [message.image_path])
+  if (message.image_path) {
+    if (!url) return <div className="w-28 h-28 rounded-2xl bg-black/10 animate-pulse" />
+    return <img src={url} alt="sticker" className="w-32 h-32 object-contain drop-shadow" />
+  }
+  return <p className="text-7xl leading-none py-1">{message.body}</p>
 }
 
 export function MessageList({
@@ -124,6 +138,25 @@ export function MessageList({
   const softDelete = async (m: Message) => {
     if (!confirm('Delete this message?')) return
     await supabase.from('messages').update({ deleted_at: new Date().toISOString(), body: null }).eq('id', m.id)
+  }
+
+  const saveSticker = async (m: Message) => {
+    if (!m.image_path || !userId) return
+    try {
+      // copy the file into my sticker collection (download + re-upload)
+      const { data: signed } = await supabase.storage.from('chat-images').createSignedUrl(m.image_path, 60)
+      if (!signed?.signedUrl) throw new Error('Could not fetch image')
+      const res = await fetch(signed.signedUrl)
+      const blob = await res.blob()
+      const path = `${userId}/${crypto.randomUUID()}.jpg`
+      const { error: upError } = await supabase.storage.from('stickers').upload(path, blob)
+      if (upError) throw upError
+      const { error: dbError } = await supabase.from('stickers').insert({ user_id: userId, image_path: path })
+      if (dbError) throw dbError
+      alert('Saved to your stickers')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Save failed')
+    }
   }
 
   const dayLabel = (iso: string): string => {
@@ -187,6 +220,10 @@ export function MessageList({
                   <Phone className="w-3 h-3" /> {m.body}
                 </span>
               </div>
+            ) : m.type === 'sticker' && !m.deleted_at ? (
+              <div className={`flex ${mine ? 'justify-end' : 'justify-start'} group relative`}>
+                <StickerView message={m} />
+              </div>
             ) : (
             <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
               <div
@@ -201,7 +238,7 @@ export function MessageList({
                 )}
                 {quoted && (
                   <div className={`text-xs rounded-lg px-2 py-1 mb-1 border-l-4 ${mine ? 'bg-black/5 border-brand-500' : 'bg-black/5 dark:bg-white/10 border-gray-300'}`}>
-                    {quoted.deleted_at ? <em className="opacity-60">deleted</em> : quoted.type === 'image' ? 'Photo' : quoted.type === 'audio' ? 'Voice note' : (quoted.body ?? '').slice(0, 120)}
+                    {quoted.deleted_at ? <em className="opacity-60">deleted</em> : quoted.type === 'image' ? 'Photo' : quoted.type === 'audio' ? 'Voice note' : quoted.type === 'sticker' ? 'Sticker' : (quoted.body ?? '').slice(0, 120)}
                   </div>
                 )}
                 {m.deleted_at ? (
@@ -237,6 +274,9 @@ export function MessageList({
                 {!m.deleted_at && (
                   <div className={`flex gap-3 mt-0.5 pb-0.5 text-[11px] font-medium sm:opacity-0 sm:group-hover:opacity-100 transition ${mine ? 'text-brand-700 dark:text-zinc-300' : 'text-gray-500'}`}>
                     <button onClick={() => onReply(m)} className="hover:underline">Reply</button>
+                    {m.type === 'image' && m.image_path && (
+                      <button onClick={() => saveSticker(m)} className="hover:underline">Save sticker</button>
+                    )}
                     {mine && m.type === 'text' && (
                       <>
                         <button onClick={() => { setEditingId(m.id); setEditBody(m.body ?? '') }} className="hover:underline">Edit</button>

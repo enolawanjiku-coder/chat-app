@@ -213,7 +213,7 @@ export default function ChatPage() {
     if (!notifOn || !document.hidden || messages.length === 0) return
     const last = messages[messages.length - 1]
     if (last.sender_id === userId || last.deleted_at) return
-    new Notification('Substack Connect', { body: last.type === 'image' ? 'New photo' : last.type === 'audio' ? 'New voice note' : (last.body ?? 'New message').slice(0, 120) })
+    new Notification('Substack Connect', { body: last.type === 'image' ? 'New photo' : last.type === 'audio' ? 'New voice note' : last.type === 'sticker' ? 'New sticker' : (last.body ?? 'New message').slice(0, 120) })
   }, [messages, notifOn, userId])
 
   const enableNotif = async () => {

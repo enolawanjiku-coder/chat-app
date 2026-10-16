@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import imageCompression from 'browser-image-compression'
-import { Camera, Images, Mic, Plus, SendHorizontal, Trash2, X } from 'lucide-react'
+import { Camera, Images, Mic, Plus, SendHorizontal, Sticker, Trash2, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { playSend } from '../lib/sounds'
 import { useAuthStore } from '../store/authStore'
 import { useTyping } from '../hooks/useTyping'
+import { StickerPicker } from './StickerPicker'
 import type { Message } from '../lib/types'
 
 const MAX_VOICE_S = 300 // 5 min cap
@@ -35,6 +36,7 @@ export function MessageComposer({
   const [sending, setSending] = useState(false)
   const [failed, setFailed] = useState(false)
   const [attachOpen, setAttachOpen] = useState(false)
+  const [stickersOpen, setStickersOpen] = useState(false)
   const { sendTyping } = useTyping(conversationId, profile?.username ?? '')
 
   // voice recording
@@ -216,9 +218,13 @@ export function MessageComposer({
 
   return (
     <div className="bg-[#f0f2f5] dark:bg-[#1f2c34] px-2 sm:px-4 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-      {replyTo && (
+      {stickersOpen && (
+        <div className="mx-1 mb-1.5">
+          <StickerPicker conversationId={conversationId} onSent={() => { onSent(); setStickersOpen(false) }} />
+        </div>
+      )}      {replyTo && (
         <div className="mx-1 mb-1.5 px-3 py-1.5 text-xs text-gray-600 dark:text-zinc-300 bg-white dark:bg-[#0b141a] rounded-xl border-l-4 border-brand-500 flex justify-between items-center">
-          <span className="truncate">Replying to: {replyTo.type === 'image' ? 'Photo' : replyTo.type === 'audio' ? 'Voice note' : (replyTo.body ?? '').slice(0, 80)}</span>
+          <span className="truncate">Replying to: {replyTo.type === 'image' ? 'Photo' : replyTo.type === 'audio' ? 'Voice note' : replyTo.type === 'sticker' ? 'Sticker' : (replyTo.body ?? '').slice(0, 80)}</span>
           <button onClick={() => onReply(null)} aria-label="Cancel reply" className="ml-2 text-gray-400 flex items-center"><X className="w-4 h-4" /></button>
         </div>
       )}
@@ -309,6 +315,14 @@ export function MessageComposer({
           className="w-11 h-11 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-gray-500 dark:text-zinc-300"
         >
           <Mic className="w-5 h-5" />
+        </button>
+        <button
+          onClick={() => { setStickersOpen((o) => !o); setAttachOpen(false) }}
+          aria-label="Stickers"
+          title="Stickers"
+          className={`w-11 h-11 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center ${stickersOpen ? 'text-brand-500' : 'text-gray-500 dark:text-zinc-300'}`}
+        >
+          <Sticker className="w-5 h-5" />
         </button>
         <button
           disabled={sending || !body.trim()}

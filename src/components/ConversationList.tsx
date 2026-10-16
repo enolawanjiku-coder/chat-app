@@ -121,7 +121,7 @@ export function ConversationList({
           }
           return {
             ...c,
-            last_body: last?.body ?? (last?.type === 'image' ? 'Photo' : last?.type === 'audio' ? 'Voice note' : null),
+            last_body: last?.body ?? (last?.type === 'image' ? 'Photo' : last?.type === 'audio' ? 'Voice note' : last?.type === 'sticker' ? 'Sticker' : null),
             last_type: last?.type ?? null,
             last_at: last?.created_at ?? null,
             unread,
