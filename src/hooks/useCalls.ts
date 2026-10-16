@@ -81,23 +81,52 @@ export function useCalls() {
     [send],
   )
 
+  // in-chat trace of the call (only the caller writes it — one row, seen by both)
+  const logSystemMessage = useCallback(
+    async (conversationId: string, text: string) => {
+      const me = userRef.current
+      if (!me) return
+      await supabase.from('messages').insert({
+        conversation_id: conversationId,
+        sender_id: me,
+        type: 'system',
+        body: text.slice(0, 200),
+      })
+    },
+    [],
+  )
+
+  const fmtDur = (secs: number): string => {
+    if (secs < 60) return `${secs}s`
+    return `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, '0')}`
+  }
+
   const endCall = useCallback(
-    (conversationId?: string, callId?: string) => {
+    (conversationId?: string, callId?: string, note?: string) => {
       const a = activeRef.current
       if (a) {
+        const kind = a.video ? 'Video' : 'Voice'
         send(a.conversationId, 'end', { callId: a.callId, from: userRef.current })
         const secs = Math.floor((Date.now() - a.startedAt) / 1000)
         void supabase
           .from('call_logs')
-          .update({ status: 'ended', ended_at: new Date().toISOString(), duration_s: secs })
+          .update({ status: note === 'no answer' ? 'missed' : 'ended', ended_at: new Date().toISOString(), duration_s: secs })
           .eq('call_id', a.callId)
+        if (a.status === 'connected') {
+          void logSystemMessage(a.conversationId, `${kind} call · ${fmtDur(secs)}`)
+        } else {
+          void logSystemMessage(a.conversationId, note === 'no answer' ? `Missed ${kind.toLowerCase()} call` : `${kind} call cancelled`)
+        }
       } else if (conversationId && callId) {
         send(conversationId, 'end', { callId, from: userRef.current })
-        void supabase.from('call_logs').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('call_id', callId)
+        void supabase
+          .from('call_logs')
+          .update({ status: note === 'no answer' ? 'missed' : 'ended', ended_at: new Date().toISOString() })
+          .eq('call_id', callId)
       }
       cleanup()
     },
-    [cleanup, send],
+    [cleanup, send, logSystemMessage],
   )
 
   // subscribe to call channels of all my conversations
@@ -135,8 +164,10 @@ export function useCalls() {
           const p = payload as { callId: string; to: string }
           if (p.to !== userRef.current) return
           if (activeRef.current?.callId === p.callId) {
+            const wasVideo = activeRef.current.video
             setCallError('Call declined')
             setTimeout(() => setCallError(null), 3000)
+            void logSystemMessage(activeRef.current.conversationId, `${wasVideo ? 'Video' : 'Voice'} call declined`)
             cleanup()
           }
         })
@@ -153,7 +184,7 @@ export function useCalls() {
     return () => {
       channels.forEach((c) => c.unsubscribe())
     }
-  }, [userId, cleanup])
+  }, [userId, cleanup, logSystemMessage])
 
   const startCall = useCallback(
     async (conversationId: string, peerName: string, video: boolean, to: string | null) => {
@@ -190,8 +221,7 @@ export function useCalls() {
         // auto-mark missed after 45s
         setTimeout(() => {
           if (activeRef.current?.callId === callId && pcRef.current?.connectionState !== 'connected') {
-            void supabase.from('call_logs').update({ status: 'missed', ended_at: new Date().toISOString() }).eq('call_id', callId)
-            endCall(conversationId, callId)
+            endCall(conversationId, callId, 'no answer')
             setCallError('No answer')
             setTimeout(() => setCallError(null), 3000)
           }

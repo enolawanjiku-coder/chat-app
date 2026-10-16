@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, CheckCheck, Lock, Pause, Play } from 'lucide-react'
+import { Check, CheckCheck, Lock, Pause, Phone, Play } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Message } from '../lib/types'
 import { useAuthStore } from '../store/authStore'
@@ -181,6 +181,13 @@ export function MessageList({
                 <span className="text-[11px] font-medium text-gray-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 shadow rounded-lg px-3 py-1">{day}</span>
               </div>
             )}
+            {m.type === 'system' ? (
+              <div className="flex justify-center my-1.5">
+                <span className="flex items-center gap-1.5 text-[11px] font-medium text-gray-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 shadow rounded-full px-3 py-1">
+                  <Phone className="w-3 h-3" /> {m.body}
+                </span>
+              </div>
+            ) : (
             <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
               <div
                 className={`max-w-[85%] sm:max-w-[70%] px-2.5 pt-1.5 pb-1 text-[14.5px] leading-snug shadow-sm group relative ${
@@ -238,8 +245,9 @@ export function MessageList({
                     )}
                   </div>
                 )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )
       })}
