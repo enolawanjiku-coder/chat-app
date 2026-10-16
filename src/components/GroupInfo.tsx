@@ -90,7 +90,7 @@ export function GroupInfo({ conversation, onClose, onChanged }: { conversation: 
   }
 
   return (
-    <div className="p-4 space-y-3 bg-white dark:bg-[#111b21] border-l border-black/5 dark:border-white/5 w-72 overflow-y-auto">
+    <div className="p-4 space-y-3 bg-white dark:bg-[#111b21] border-l border-black/5 dark:border-white/5 w-full h-full md:w-72 overflow-y-auto nice-scroll">
       <div className="flex justify-between items-center">
         <h2 className="font-bold dark:text-zinc-100">{isGroup ? 'Group info' : 'Chat info'}</h2>
         <button onClick={onClose} aria-label="Close" className="text-gray-500 dark:text-zinc-400 flex items-center"><X className="w-5 h-5" /></button>

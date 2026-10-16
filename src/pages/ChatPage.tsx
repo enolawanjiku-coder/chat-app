@@ -400,10 +400,13 @@ export default function ChatPage() {
             )}
           </div>
           {showInfo && activeConv && (
-            <div className={`${showChatOnMobile ? 'hidden md:block' : 'block'} shrink-0`}>
-              <Suspense fallback={null}>
-                <GroupInfo conversation={activeConv} onClose={() => setShowInfo(false)} onChanged={() => { setRefreshKey((k) => k + 1); setActiveId(null) }} />
-              </Suspense>
+            <div className="fixed inset-0 z-30 md:static md:z-auto md:shrink-0">
+              <div className="absolute inset-0 bg-black/50 md:hidden" onClick={() => setShowInfo(false)} />
+              <div className="absolute inset-y-0 right-0 w-80 max-w-[85vw] md:static md:w-auto md:h-auto shadow-2xl md:shadow-none">
+                <Suspense fallback={null}>
+                  <GroupInfo conversation={activeConv} onClose={() => setShowInfo(false)} onChanged={() => { setRefreshKey((k) => k + 1); setActiveId(null) }} />
+                </Suspense>
+              </div>
             </div>
           )}
         </main>
