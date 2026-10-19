@@ -56,6 +56,38 @@ function statusText(role: 'sharer' | 'viewer', phase: string, remoteHasAudio: bo
   }
 }
 
+type OrientationLockApi = {
+  lock?: (orientation: string) => Promise<void>
+  unlock?: () => void
+}
+
+/** Fullscreen + landscape. Orientation lock is Android/Chrome only and needs fullscreen. */
+async function enterImmersive() {
+  try {
+    if (!document.fullscreenElement) await document.documentElement.requestFullscreen()
+  } catch {
+    /* iOS Safari can't fullscreen arbitrary elements */
+  }
+  try {
+    await (screen.orientation as unknown as OrientationLockApi)?.lock?.('landscape')
+  } catch {
+    /* unsupported (iOS/desktop) — the layout still works in portrait */
+  }
+}
+
+function exitImmersive() {
+  try {
+    if (document.fullscreenElement) void document.exitFullscreen()
+  } catch {
+    /* ignore */
+  }
+  try {
+    ;(screen.orientation as unknown as OrientationLockApi)?.unlock?.()
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Header toggle for starting/stopping a screen share (1:1 chats only). */
 export function ScreenShareButton() {
   const s = useScreenShareCtx()
@@ -77,12 +109,22 @@ export function ScreenShareButton() {
 export function ScreenShareLayer() {
   const s = useScreenShareCtx()
   const [expanded, setExpanded] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const isSharer = s.role === 'sharer'
   const stream = isSharer ? s.localStream : s.remoteStream
 
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+
   // Leaving a session resets the expanded viewer.
   useEffect(() => {
-    if (!s.role) setExpanded(false)
+    if (!s.role) {
+      setExpanded(false)
+      exitImmersive()
+    }
   }, [s.role])
 
   // ── Incoming share request (viewer hasn't accepted yet) ───────────────────
@@ -174,7 +216,7 @@ export function ScreenShareLayer() {
             </button>
           )}
           <button
-            onClick={() => setExpanded(true)}
+            onClick={() => { setExpanded(true); void enterImmersive() }}
             aria-label="Expand screen share"
             className="w-9 h-9 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-gray-600 dark:text-zinc-300"
           >
@@ -212,8 +254,21 @@ export function ScreenShareLayer() {
                   {s.muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                 </button>
               )}
-              <button onClick={() => setExpanded(false)} aria-label="Minimize" className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center">
-                <Minimize2 className="w-5 h-5" />
+              <button
+                onClick={() => (isFullscreen ? exitImmersive() : void enterImmersive())}
+                aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen landscape'}
+                title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen (landscape)'}
+                className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center"
+              >
+                {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+              </button>
+              <button
+                onClick={() => { setExpanded(false); exitImmersive() }}
+                aria-label="Close fullscreen viewer"
+                title="Close"
+                className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center"
+              >
+                <X className="w-5 h-5" />
               </button>
             </div>
           </div>
