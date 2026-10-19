@@ -22,16 +22,23 @@ Always run `npm run lint` and `npm run build` before finishing a change. There i
 
 1. Apply `supabase/migrations/0014_music.sql` (after `0001`–`0013`).
 2. To enforce Realtime authorization: Dashboard → Project Settings → Realtime → disable **Allow public access**. Do **not** run `alter table realtime.messages enable row level security`.
-3. Env vars (unchanged): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_APP_URL`. Deploy on Vercel as usual.
+3. Env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_APP_URL` (unchanged), plus `VITE_YOUTUBE_API_KEY` to enable music search (see below). Deploy on Vercel as usual.
 
 ## Media: YouTube music feature
 
-Files: `src/lib/youtube.ts` (IFrame API loader + URL/ID parsing), `src/hooks/useYouTubePlayer.ts` (player lifecycle), `src/hooks/useGroupMusic.ts` (Realtime sync), `src/components/MusicPanel.tsx` (UI), wired into `src/pages/ChatPage.tsx`.
+Files: `src/lib/youtube.ts` (IFrame API loader + URL/ID parsing + Data API search), `src/hooks/useYouTubePlayer.ts` (player lifecycle), `src/hooks/useGroupMusic.ts` (Realtime sync), `src/components/MusicPanel.tsx` (UI), wired into `src/pages/ChatPage.tsx`.
 
 - Official YouTube IFrame Player API only (`controls: 1`, branding preserved). No downloads, audio extraction, or proxying.
+- Search uses the official **YouTube Data API v3** (`search.list`, `videoEmbeddable=true`) and needs `VITE_YOUTUBE_API_KEY` (a browser key restricted by HTTP referrer). Without it, the search box shows a hint and users can still paste a link/ID. Quota is ~100 searches/day on the free tier.
 - Background audio is not supported by the IFrame API: playback pauses when the tab is backgrounded/hidden; show the poster/tap overlay and never promise background play.
 
 ### Manual test checklist
+
+Search
+- [ ] With `VITE_YOUTUBE_API_KEY` set, typing a song/artist and pressing Enter (or Search) shows results with thumbnails.
+- [ ] Clicking a result plays it (solo) / starts it for the group; the `+` adds it to the shared queue.
+- [ ] Without the key, the search box shows the config hint and link/ID paste still works.
+- [ ] An invalid key / disabled Data API / quota-exceeded shows a clear error, not a crash.
 
 Solo
 - [ ] Paste a `watch`, `shorts`, `live`, `youtu.be`, and `music.youtube.com` link; each loads correctly.

@@ -3,17 +3,27 @@ import {
   AlertCircle,
   ExternalLink,
   ListMusic,
+  Loader2,
   Maximize2,
   Music,
   Pause,
   Play,
   Plus,
   Radio,
+  Search,
   Trash2,
   Users,
   X,
 } from 'lucide-react'
-import { YT_STATE, isValidVideoId, parseYouTubeId, youTubeWatchUrl } from '../lib/youtube'
+import {
+  YT_STATE,
+  isValidVideoId,
+  parseYouTubeId,
+  searchEnabled,
+  searchYouTube,
+  type YouTubeSearchResult,
+  youTubeWatchUrl,
+} from '../lib/youtube'
 import { useYouTubePlayer } from '../hooks/useYouTubePlayer'
 import { useGroupMusic, type GroupMusicState } from '../hooks/useGroupMusic'
 import { useAuthStore } from '../store/authStore'
@@ -66,6 +76,11 @@ export function MusicPanel({
   const [mode, setMode] = useState<'solo' | 'group'>('solo')
   const [input, setInput] = useState('')
   const [inputError, setInputError] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<YouTubeSearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const searchAbort = useRef<AbortController | null>(null)
   const [solo, setSolo] = useState<SoloState>(readSolo)
   const [needsTap, setNeedsTap] = useState(false)
   const [scrub, setScrub] = useState<number | null>(null)
@@ -228,6 +243,9 @@ export function MusicPanel({
     }
   }, [groupEnabled, requestGroupState])
 
+  // Abort any in-flight search when the panel unmounts.
+  useEffect(() => () => searchAbort.current?.abort(), [])
+
   const submitInput = (addToQueueOnly: boolean) => {
     setInputError(null)
     const videoId = parseYouTubeId(input)
@@ -309,6 +327,38 @@ export function MusicPanel({
       setSolo(next)
       writeSolo(next)
     }
+  }
+
+  const runSearch = async () => {
+    const q = query.trim()
+    if (!q || searching) return
+    searchAbort.current?.abort()
+    const controller = new AbortController()
+    searchAbort.current = controller
+    setSearching(true)
+    setSearchError(null)
+    try {
+      const found = await searchYouTube(q, controller.signal)
+      if (controller.signal.aborted) return
+      setResults(found)
+      if (found.length === 0) setSearchError('No results. Try different words.')
+    } catch (err) {
+      if ((err as { name?: string } | null)?.name === 'AbortError') return
+      setResults([])
+      setSearchError(err instanceof Error ? err.message : 'Search failed.')
+    } finally {
+      if (searchAbort.current === controller) setSearching(false)
+    }
+  }
+
+  const playResult = (r: YouTubeSearchResult) => {
+    if (groupEnabled) group.startTrack(r.videoId, r.title)
+    else playQueueItem(r.videoId, r.title)
+    setNeedsTap(false)
+  }
+
+  const queueResult = (r: YouTubeSearchResult) => {
+    group.addToQueue({ videoId: r.videoId, title: r.title })
   }
 
   const listeners = group.participants.length
@@ -406,25 +456,93 @@ export function MusicPanel({
 
             <div className="p-3 space-y-2">
               <div className="flex gap-2">
-                <input
-                  className="flex-1 min-w-0 border border-black/10 dark:border-white/10 rounded-full px-3.5 py-2 text-sm bg-transparent dark:text-zinc-100 dark:placeholder:text-zinc-500"
-                  placeholder="Paste a YouTube link…"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') submitInput(false)
-                  }}
-                />
-                <button onClick={() => submitInput(false)} disabled={!input.trim()} className="shrink-0 bg-brand-500 disabled:opacity-40 text-white rounded-full px-4 py-2 text-sm font-semibold">
-                  Play
+                <div className="relative flex-1 min-w-0">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <input
+                    className="w-full border border-black/10 dark:border-white/10 rounded-full pl-9 pr-3 py-2 text-sm bg-transparent dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                    placeholder="Search songs or artists…"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        void runSearch()
+                      }
+                    }}
+                  />
+                </div>
+                <button
+                  onClick={() => void runSearch()}
+                  disabled={!query.trim() || searching}
+                  className="shrink-0 bg-brand-500 disabled:opacity-40 text-white rounded-full px-4 py-2 text-sm font-semibold flex items-center gap-1.5"
+                >
+                  {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Search
                 </button>
               </div>
-              {mode === 'group' && groupEnabled && (
-                <button onClick={() => submitInput(true)} disabled={!input.trim()} className="flex items-center gap-1 text-xs text-brand-600 disabled:opacity-40">
-                  <Plus className="w-3.5 h-3.5" /> Add to shared queue
-                </button>
+
+              {!searchEnabled && (
+                <p className="text-[11px] text-gray-500 dark:text-zinc-400 bg-black/5 dark:bg-white/5 rounded-xl px-3 py-2">
+                  Search needs a YouTube Data API key. Add <code className="font-mono">VITE_YOUTUBE_API_KEY</code> to your env to enable it. You can still paste a link below.
+                </p>
               )}
-              {inputError && <p className="text-xs text-red-600">{inputError}</p>}
+              {searchError && <p className="text-xs text-red-600">{searchError}</p>}
+
+              {results.length > 0 && (
+                <ul className="max-h-64 overflow-y-auto nice-scroll rounded-xl border border-black/5 dark:border-white/10 divide-y divide-black/5 dark:divide-white/5">
+                  {results.map((r) => (
+                    <li key={r.videoId} className="flex items-center gap-2 p-2">
+                      {r.thumbnail ? (
+                        <img src={r.thumbnail} alt="" loading="lazy" className="w-16 h-9 rounded object-cover shrink-0 bg-black/10" />
+                      ) : (
+                        <div className="w-16 h-9 rounded shrink-0 bg-black/10" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-800 dark:text-zinc-200 truncate">{r.title}</p>
+                        {r.channelTitle && <p className="text-[11px] text-gray-400 truncate">{r.channelTitle}</p>}
+                      </div>
+                      {groupEnabled ? (
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button onClick={() => playResult(r)} className="text-[11px] font-semibold text-white bg-brand-500 rounded-full px-2.5 py-1">Play</button>
+                          <button onClick={() => queueResult(r)} aria-label="Add to shared queue" className="text-brand-600 rounded-full p-1.5 hover:bg-black/5 dark:hover:bg-white/10">
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => playResult(r)} aria-label="Play" className="shrink-0 w-8 h-8 rounded-full bg-brand-500 text-white flex items-center justify-center">
+                          <Play className="w-4 h-4" />
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <details className="text-xs">
+                <summary className="cursor-pointer text-gray-500 dark:text-zinc-400 select-none">Have a link or video ID?</summary>
+                <div className="mt-2 space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      className="flex-1 min-w-0 border border-black/10 dark:border-white/10 rounded-full px-3.5 py-2 text-sm bg-transparent dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                      placeholder="Paste a YouTube link…"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') submitInput(false)
+                      }}
+                    />
+                    <button onClick={() => submitInput(false)} disabled={!input.trim()} className="shrink-0 bg-brand-500 disabled:opacity-40 text-white rounded-full px-4 py-2 text-sm font-semibold">
+                      Play
+                    </button>
+                  </div>
+                  {mode === 'group' && groupEnabled && (
+                    <button onClick={() => submitInput(true)} disabled={!input.trim()} className="flex items-center gap-1 text-xs text-brand-600 disabled:opacity-40">
+                      <Plus className="w-3.5 h-3.5" /> Add to shared queue
+                    </button>
+                  )}
+                  {inputError && <p className="text-xs text-red-600">{inputError}</p>}
+                </div>
+              </details>
             </div>
 
             {hasTrack && (

@@ -161,3 +161,84 @@ export function youTubeErrorMessage(code: number): string {
       return 'This video can\'t be played here.'
   }
 }
+
+// ── Search (YouTube Data API v3) ─────────────────────────────────────────────
+// Search is the only part that needs a key; playback still uses the official
+// IFrame player. The key is a browser key, so restrict it by HTTP referrer.
+export const youTubeApiKey = ((import.meta.env.VITE_YOUTUBE_API_KEY as string | undefined) ?? '').trim()
+export const searchEnabled = youTubeApiKey.length > 0
+
+export type YouTubeSearchResult = {
+  videoId: string
+  title: string
+  channelTitle: string
+  thumbnail: string
+}
+
+function decodeEntities(text: string): string {
+  if (typeof document === 'undefined') return text
+  const el = document.createElement('textarea')
+  el.innerHTML = text
+  return el.value
+}
+
+/** Searches YouTube for embeddable videos. Requires VITE_YOUTUBE_API_KEY. */
+export async function searchYouTube(query: string, signal?: AbortSignal): Promise<YouTubeSearchResult[]> {
+  const q = query.trim()
+  if (!q) return []
+  if (!searchEnabled) throw new Error('Search needs a YouTube Data API key (VITE_YOUTUBE_API_KEY).')
+
+  const url = new URL('https://www.googleapis.com/youtube/v3/search')
+  url.searchParams.set('part', 'snippet')
+  url.searchParams.set('type', 'video')
+  url.searchParams.set('maxResults', '20')
+  url.searchParams.set('videoEmbeddable', 'true')
+  url.searchParams.set('safeSearch', 'moderate')
+  url.searchParams.set('q', q)
+  url.searchParams.set('key', youTubeApiKey)
+
+  let res: Response
+  try {
+    res = await fetch(url.toString(), { signal })
+  } catch (err) {
+    if ((err as { name?: string } | null)?.name === 'AbortError') throw err
+    throw new Error('Could not reach YouTube. Check your connection.')
+  }
+
+  if (!res.ok) {
+    let reason = ''
+    try {
+      const body = (await res.json()) as { error?: { errors?: { reason?: string }[]; message?: string } }
+      reason = body.error?.errors?.[0]?.reason ?? body.error?.message ?? ''
+    } catch {
+      // ignore non-JSON error bodies
+    }
+    if (res.status === 403 && /quota|daily/i.test(reason)) throw new Error('YouTube search quota reached for today. Try again later.')
+    if (res.status === 400 || res.status === 403) throw new Error('YouTube search key is missing, invalid, or the Data API is not enabled.')
+    throw new Error('YouTube search failed. Try again.')
+  }
+
+  const body = (await res.json()) as {
+    items?: {
+      id?: { videoId?: string }
+      snippet?: {
+        title?: string
+        channelTitle?: string
+        thumbnails?: { medium?: { url?: string }; default?: { url?: string } }
+      }
+    }[]
+  }
+
+  return (body.items ?? [])
+    .map((item): YouTubeSearchResult | null => {
+      const videoId = item.id?.videoId
+      if (!isValidVideoId(videoId)) return null
+      return {
+        videoId,
+        title: decodeEntities(item.snippet?.title ?? '').trim() || videoId,
+        channelTitle: decodeEntities(item.snippet?.channelTitle ?? '').trim(),
+        thumbnail: item.snippet?.thumbnails?.medium?.url ?? item.snippet?.thumbnails?.default?.url ?? '',
+      }
+    })
+    .filter((r): r is YouTubeSearchResult => r !== null)
+}
