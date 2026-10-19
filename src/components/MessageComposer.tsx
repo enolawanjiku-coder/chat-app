@@ -254,14 +254,14 @@ export function MessageComposer({
           </button>
         </div>
       ) : (
-      <form onSubmit={sendText} className="flex items-end gap-1.5">
+      <form onSubmit={sendText} className="flex items-end gap-1.5 min-w-0">
         <div className="relative shrink-0">
           <button
             type="button"
             onClick={() => setAttachOpen((o) => !o)}
             aria-label="Attach photo"
             title="Send photo"
-            className="w-11 h-11 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-gray-500 dark:text-zinc-300"
+            className="w-10 h-10 sm:w-11 sm:h-11 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-gray-500 dark:text-zinc-300"
           >
             <Plus className="w-6 h-6" />
           </button>
@@ -296,11 +296,18 @@ export function MessageComposer({
                   }}
                 />
               </label>
+              <button
+                type="button"
+                onClick={() => { setStickersOpen(true); setAttachOpen(false) }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 text-sm dark:text-zinc-100"
+              >
+                <Sticker className="w-5 h-5 text-brand-500" /> Stickers
+              </button>
             </div>
           )}
         </div>
         <input
-          className="flex-1 rounded-full px-4 py-2.5 text-[15px] outline-none bg-white dark:bg-[#2a3942] text-gray-900 dark:text-zinc-100 placeholder:text-gray-400 shadow-sm"
+          className="min-w-0 flex-1 rounded-full px-4 py-2.5 text-[16px] sm:text-[15px] outline-none bg-white dark:bg-[#2a3942] text-gray-900 dark:text-zinc-100 placeholder:text-gray-400 shadow-sm"
           placeholder="Message"
           value={body}
           onChange={(e) => {
@@ -308,26 +315,31 @@ export function MessageComposer({
             sendTyping()
           }}
         />
+        {!body.trim() && (
+          <button
+            type="button"
+            onClick={startRecording}
+            aria-label="Record voice note"
+            title="Voice note"
+            className="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-gray-500 dark:text-zinc-300"
+          >
+            <Mic className="w-5 h-5" />
+          </button>
+        )}
         <button
-          onClick={startRecording}
-          aria-label="Record voice note"
-          title="Voice note"
-          className="w-11 h-11 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-gray-500 dark:text-zinc-300"
-        >
-          <Mic className="w-5 h-5" />
-        </button>
-        <button
+          type="button"
           onClick={() => { setStickersOpen((o) => !o); setAttachOpen(false) }}
           aria-label="Stickers"
           title="Stickers"
-          className={`w-11 h-11 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center ${stickersOpen ? 'text-brand-500' : 'text-gray-500 dark:text-zinc-300'}`}
+          className={`hidden sm:flex w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 items-center justify-center ${stickersOpen ? 'text-brand-500' : 'text-gray-500 dark:text-zinc-300'}`}
         >
           <Sticker className="w-5 h-5" />
         </button>
         <button
+          type="submit"
           disabled={sending || !body.trim()}
           aria-label="Send"
-          className="w-11 h-11 shrink-0 rounded-full bg-brand-500 text-white flex items-center justify-center shadow disabled:opacity-40 active:scale-95 transition"
+          className="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-full bg-brand-500 text-white flex items-center justify-center shadow disabled:opacity-40 active:scale-95 transition"
         >
           {sending ? <span className="typing-dots"><span>•</span></span> : <SendHorizontal className="w-5 h-5" />}
         </button>
