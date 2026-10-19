@@ -55,7 +55,7 @@ export default function ChatPage() {
   const setActiveId = useChatStore((s) => s.setActiveConversationId)
   useSession()
   const hydrated = useAuthStore((s) => s.hydrated)
-  const { messages, loadMore, loadingMore, hasMore } = useMessages(activeId)
+  const { messages, loadMore, loadingMore, hasMore, refreshLatest } = useMessages(activeId)
   const { typingUsers } = useTyping(activeId, profile?.username ?? '')
   const { onlineIds } = usePresence(activeId)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
@@ -432,7 +432,7 @@ export default function ChatPage() {
                 <MessageList messages={visibleMessages} onLoadMore={loadMore} hasMore={hasMore && !search} loadingMore={loadingMore} replyTo={replyTo} onReply={setReplyTo} wallpaper={wallpaperSrc(wallpaperId)} dark={dark} peerLastRead={peerLastRead} peerOnline={otherOnline} isDirect={activeConv?.type === 'direct'} />
                 <SharedPlayerBar />
                 <ScreenShareLayer />
-                <MessageComposer conversationId={activeId} replyTo={replyTo} onReply={setReplyTo} onSent={() => setRefreshKey((k) => k + 1)} />
+                <MessageComposer conversationId={activeId} replyTo={replyTo} onReply={setReplyTo} onSent={() => { void refreshLatest(); setRefreshKey((k) => k + 1) }} />
                 {musicMounted && (
                   <Suspense fallback={null}>
                     <MusicPanel open={musicOpen} onClose={() => setMusicOpen(false)} />
