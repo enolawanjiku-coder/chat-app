@@ -275,8 +275,8 @@ export async function searchYouTube(query: string, signal?: AbortSignal): Promis
       // ignore non-JSON error bodies
     }
     if (res.status === 403 && /quota|daily/i.test(reason)) throw new Error('YouTube search quota reached for today. Try again later.')
-    if (res.status === 400 || res.status === 403) throw new Error('YouTube search key is missing, invalid, or the Data API is not enabled.')
-    throw new Error('YouTube search failed. Try again.')
+    if (res.status === 400 || res.status === 403) throw new Error(`YouTube key problem: ${reason || 'missing/invalid key, or the Data API is not enabled'}.`)
+    throw new Error(`YouTube search failed${reason ? ` (${reason})` : ''}.`)
   }
 
   const body = (await res.json()) as {
@@ -334,7 +334,7 @@ export async function fetchPlaylistItems(playlistId: string, signal?: AbortSigna
       // ignore non-JSON error bodies
     }
     if (res.status === 403 && /quota|daily/i.test(reason)) throw new Error('YouTube quota reached for today. Try again later.')
-    if (res.status === 400 || res.status === 403) throw new Error('YouTube key is missing, invalid, or the Data API is not enabled.')
+    if (res.status === 400 || res.status === 403) throw new Error(`YouTube key problem: ${reason || 'missing/invalid key, or the Data API is not enabled'}.`)
     if (res.status === 404) throw new Error('That playlist is private or does not exist.')
     throw new Error('Could not load the playlist. Try again.')
   }
