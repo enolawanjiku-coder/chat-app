@@ -12,7 +12,6 @@ import { useCalls } from '../hooks/useCalls'
 import { isMuted, playPop, playTick, setMuted } from '../lib/sounds'
 import { isValidUsername, normalizeUsername } from '../lib/username'
 import { getWallpaper, setWallpaper, wallpaperSrc } from '../lib/wallpapers'
-import { authLog } from '../lib/authlog'
 import type { Conversation, Message } from '../lib/types'
 import { ConversationList } from '../components/ConversationList'
 import { MessageList } from '../components/MessageList'
@@ -131,10 +130,8 @@ export default function ChatPage() {
     supabase.auth.getSession().then(({ data }) => {
       if (gone) return
       if (!data.session) {
-        authLog('redirect-to-login (hydrated, no user, no session)')
         navigate('/login', { replace: true })
       } else {
-        authLog('gate: session exists, staying')
         useAuthStore.getState().setAuth(data.session.user.id, useAuthStore.getState().profile)
       }
     })

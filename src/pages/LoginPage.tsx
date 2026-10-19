@@ -1,18 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
-import { supabase, missingSupabaseConfig } from '../lib/supabase'
-import { authLog, readAuthLog } from '../lib/authlog'
+import { supabase } from '../lib/supabase'
 import { isValidEmail } from '../lib/username'
-
-const BUILD = 'loginfix3'
-const CONF_HOST = (() => {
-  try {
-    return new URL(import.meta.env.VITE_SUPABASE_URL as string).hostname
-  } catch {
-    return 'missing'
-  }
-})()
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -21,28 +11,20 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [showPw, setShowPw] = useState(false)
-  const [authState, setAuthState] = useState<string>('checking…')
-  const [authTrail, setAuthTrail] = useState<string[]>([])
 
   // live session indicator — proves whether sign-in actually sticks.
   // If a session is already active, leave login immediately: sitting on the
   // form while signed in is exactly the "button does nothing" state.
   // replace:true keeps history clean so the back button can't ping-pong.
   useEffect(() => {
-    setAuthTrail(readAuthLog())
     let gone = false
     supabase.auth.getSession().then(({ data }) => {
       if (gone) return
       if (data.session) {
-        authLog('login-page: session active, leaving')
         navigate('/', { replace: true })
-        return
       }
-      setAuthState('signed out')
     })
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuthState(session ? `signed in as ${session.user.email}` : 'signed out')
-      setAuthTrail(readAuthLog())
       if (session) navigate('/', { replace: true })
     })
     return () => {
@@ -68,11 +50,9 @@ export default function LoginPage() {
         password: cleanPassword,
       })
       if (error) throw error
-      authLog('signin-ok')
       // verify the session actually persisted before leaving — if storage is
       // blocked the user would otherwise bounce straight back to login
       const { data: check } = await supabase.auth.getSession()
-      authLog(`session-check:${check.session ? 'YES' : 'NO'}`)
       if (!check.session) {
         throw new Error('Signed in but the session could not be saved — your browser may be blocking site storage (cookies/site data). Allow storage for this site and try again.')
       }
@@ -109,11 +89,6 @@ export default function LoginPage() {
           {busy ? 'Logging in…' : 'Log in'}
         </button>
         <p className="text-sm text-center text-gray-500">No account? <Link className="text-brand-600 font-semibold" to="/signup">Sign up</Link></p>
-        <p className="text-[10px] text-center text-gray-300">build {BUILD} · {missingSupabaseConfig ? 'NOT CONFIGURED' : CONF_HOST}</p>
-        <p className="text-[10px] text-center text-gray-300">session: {authState}</p>
-        {authTrail.length > 0 && (
-          <p className="text-[10px] text-center text-gray-300 whitespace-pre-line">{authTrail.join('\n')}</p>
-        )}
       </form>
     </div>
   )
