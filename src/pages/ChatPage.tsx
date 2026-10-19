@@ -216,6 +216,13 @@ export default function ChatPage() {
     }
   }, [])
 
+  // Periodically refresh the peer's `last_seen` so the online indicator stays
+  // correct even if the presence channel is not delivering updates.
+  useEffect(() => {
+    const timer = window.setInterval(() => setRefreshKey((k) => k + 1), 30000)
+    return () => window.clearInterval(timer)
+  }, [])
+
   useEffect(() => {
     if (!notifOn || !document.hidden || messages.length === 0) return
     const last = messages[messages.length - 1]
@@ -243,7 +250,10 @@ export default function ChatPage() {
     return `last seen ${new Date(iso).toLocaleDateString()}`
   }
 
-  const otherOnline = otherUserId ? onlineIds.includes(otherUserId) : false
+  // Fallback when the Realtime presence channel is unavailable: treat a very
+  // recent `last_seen` heartbeat as online so the indicator stays accurate.
+  const recentLastSeen = otherLastSeen ? Date.now() - new Date(otherLastSeen).getTime() < 90_000 : false
+  const otherOnline = otherUserId ? onlineIds.includes(otherUserId) || recentLastSeen : false
   const presenceLabel =
     typingUsers.length > 0
       ? null

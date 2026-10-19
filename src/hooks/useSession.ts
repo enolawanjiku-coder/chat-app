@@ -5,6 +5,24 @@ import { useAuthStore } from '../store/authStore'
 export function useSession() {
   const setAuth = useAuthStore((s) => s.setAuth)
   const setHydrated = useAuthStore((s) => s.setHydrated)
+  const userId = useAuthStore((s) => s.userId)
+
+  useEffect(() => {
+    if (!userId) return
+    const beat = () => {
+      void supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', userId)
+    }
+    beat()
+    const timer = window.setInterval(beat, 45000)
+    const onVisible = () => {
+      if (!document.hidden) beat()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [userId])
 
   useEffect(() => {
     let mounted = true

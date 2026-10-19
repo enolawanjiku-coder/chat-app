@@ -97,9 +97,28 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
     channelRef.current?.send({ type: 'broadcast', event, payload })
   }, [])
 
-  // Fire-and-forget send on a throwaway channel (used when leaving the chat).
+  // Fire-and-forget send on a short-lived channel (used when leaving the chat).
   const sendTransient = useCallback((convId: string, event: string, payload: Record<string, unknown>) => {
-    void supabase.channel(`screen:${convId}`, { config: { private: true } }).send({ type: 'broadcast', event, payload })
+    const ch = supabase.channel(`screen:${convId}`, { config: { private: true } })
+    const cleanup = () => void supabase.removeChannel(ch)
+    const timer = window.setTimeout(cleanup, 5000)
+    ch.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        void ch
+          .send({ type: 'broadcast', event, payload })
+          .then(() => {
+            window.clearTimeout(timer)
+            window.setTimeout(cleanup, 300)
+          })
+          .catch(() => {
+            window.clearTimeout(timer)
+            cleanup()
+          })
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        window.clearTimeout(timer)
+        cleanup()
+      }
+    })
   }, [])
 
   const resetLocal = useCallback(() => {
@@ -385,7 +404,7 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
 
     window.setTimeout(() => {
       if (sessionRef.current === sessionId && pcRef.current?.connectionState !== 'connected') {
-        if (mountedRef.current) setError('No response. The other person may be offline.')
+        if (mountedRef.current) setError('No response from the other person. Make sure they are active in this chat on a different account, then try again.')
         stopShareRef.current?.()
       }
     }, 30000)
