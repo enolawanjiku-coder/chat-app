@@ -20,9 +20,9 @@ Always run `npm run lint` and `npm run build` before finishing a change. There i
 
 ## Database / deployment
 
-1. Apply `supabase/migrations/0014_music.sql` and `0015_music_playlist.sql` (after `0001`–`0013`).
+1. Apply `supabase/migrations/0014_music.sql`, `0015_music_playlist.sql` and `0016_screenshare.sql` (after `0001`–`0013`).
 2. To enforce Realtime authorization: Dashboard → Project Settings → Realtime → disable **Allow public access**. Do **not** run `alter table realtime.messages enable row level security`.
-3. Env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_APP_URL` (unchanged), plus `VITE_YOUTUBE_API_KEY` to enable music search (see below). Deploy on Vercel as usual.
+3. Env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_APP_URL` (unchanged), plus `VITE_YOUTUBE_API_KEY` (music search) and the optional `VITE_TURN_*` (screen sharing). Deploy on Vercel as usual.
 
 ## Media: shared YouTube "TV" in the chat
 
@@ -72,3 +72,35 @@ Authorization / resilience
 Mobile
 - [ ] The player bar stays visible and usable; controls are reachable; chat scrolls behind it.
 - [ ] Switching conversations stops the previous chat's audio.
+
+## Media: 1:1 screen sharing & Netflix watch-together
+
+An optional feature for **direct** chats: a user opens Netflix in their own tab (or anything else), shares that tab/window/screen, and the other participant watches. Users who don't use it keep chatting normally.
+
+Files:
+- `src/hooks/useScreenShare.ts` — WebRTC capture + signaling; STUN now, optional TURN via `VITE_TURN_*`.
+- `src/components/ScreenShareProvider.tsx` — context (`useScreenShareCtx`) around the chat pane.
+- `src/components/ScreenShareLayer.tsx` — `ScreenShareButton` (header), incoming prompt, docked bar, fullscreen viewer.
+- `src/components/NetflixPanel.tsx` — Netflix entry point/actions; `SettingsDrawer` has a "Watch together" section too.
+- `supabase/migrations/0016_screenshare.sql` — adds `screen:` to the Realtime topic allowlist.
+
+Rules:
+- **Signaling only** goes through Supabase: private channel `screen:<conversationId>`, events `offer`/`answer`/`ice`/`stop`/`decline`. The screen video/audio is peer-to-peer (WebRTC) and is **never** stored, recorded, or relayed by Supabase.
+- No Netflix OAuth/integration exists: never build a Netflix login page, and never collect/store Netflix passwords, cookies, or session tokens. The user signs in on netflix.com. This is unrelated to the app's own Supabase auth session.
+- Capture always requires the native `getDisplayMedia` picker — never capture silently.
+- Netflix/protected video may render black (DRM); tell the user and don't attempt to bypass it.
+- Update `buildIceServers()` if TURN is needed; do not promise connectivity on every network without TURN.
+
+### Manual test checklist
+
+Netflix / entry points
+- [ ] The header Netflix button and Settings → "Watch together" both open netflix.com in a new tab (no credential prompts).
+- [ ] "Share my screen" is enabled in a direct chat, disabled/hinted in a group chat.
+
+Screen sharing (two accounts, two browsers)
+- [ ] Sharer picks a tab/window/screen; the other sees an accept prompt, then the live view.
+- [ ] Draft tab audio is received when the source provides it; viewer mute works.
+- [ ] Sharer's browser "Stop sharing" button, the app's Stop, and leaving the chat all end the stream for both.
+- [ ] Permission denied, unsupported browser, and connection failure each show a clear message.
+- [ ] Connection/disconnection is indicated for both sides; only members of the conversation receive signaling.
+

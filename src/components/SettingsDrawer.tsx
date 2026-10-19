@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Ban, Bell, ImageIcon, LogOut, Moon, Palette, Sun, User, Volume2, VolumeX, X } from 'lucide-react'
+import { Ban, Bell, ExternalLink, ImageIcon, LogOut, Moon, Palette, Sun, Tv2, User, Volume2, VolumeX, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { WALLPAPERS } from '../lib/wallpapers'
@@ -149,6 +149,19 @@ export function SettingsDrawer({
           <div className="px-4 py-2 flex items-center gap-3 text-sm text-gray-900 dark:text-zinc-100">
             <ImageIcon className="w-5 h-5 text-gray-500" />
             <span>Photos compress before upload (max 5MB)</span>
+          </div>
+
+          <p className="px-4 pt-3 pb-1 text-[11px] font-bold uppercase tracking-wide text-gray-400">Watch together</p>
+          <div className="px-4 py-2 space-y-2">
+            <button
+              onClick={() => window.open('https://www.netflix.com/browse', '_blank', 'noopener,noreferrer')}
+              className="w-full flex items-center justify-center gap-2 bg-brand-500 text-white rounded-2xl py-2.5 text-sm font-semibold active:scale-[.99]"
+            >
+              <Tv2 className="w-4 h-4" /> Open Netflix <ExternalLink className="w-3.5 h-3.5" />
+            </button>
+            <p className="text-[11px] text-gray-500 dark:text-zinc-400">
+              Use your own Netflix account, then share your screen from a one-to-one chat. We never ask for or store your Netflix password, cookies or session.
+            </p>
           </div>
         </div>
 

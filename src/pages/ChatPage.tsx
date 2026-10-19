@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Menu, Music, Phone, Users, Video } from 'lucide-react'
+import { ArrowLeft, Menu, Music, Phone, Users, Video, Tv2 } from 'lucide-react'
 import { supabase, missingSupabaseConfig } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
@@ -21,12 +21,15 @@ import { StatusRow } from '../components/StatusRow'
 import { CallHistory } from '../components/CallHistory'
 import { MusicProvider } from '../components/MusicProvider'
 import { SharedPlayerBar } from '../components/SharedPlayerBar'
+import { ScreenShareProvider } from '../components/ScreenShareProvider'
+import { ScreenShareLayer, ScreenShareButton } from '../components/ScreenShareLayer'
 
 // heavy below-fold overlays load after first paint (smaller initial bundle on phones)
 const CallOverlay = lazy(() => import('../components/CallOverlay').then((m) => ({ default: m.CallOverlay })))
 const GroupInfo = lazy(() => import('../components/GroupInfo').then((m) => ({ default: m.GroupInfo })))
 const SettingsDrawer = lazy(() => import('../components/SettingsDrawer').then((m) => ({ default: m.SettingsDrawer })))
 const MusicPanel = lazy(() => import('../components/MusicPanel').then((m) => ({ default: m.MusicPanel })))
+const NetflixPanel = lazy(() => import('../components/NetflixPanel').then((m) => ({ default: m.NetflixPanel })))
 
 function SplashGate() {
   const [slow, setSlow] = useState(false)
@@ -102,6 +105,8 @@ export default function ChatPage() {
   const [sideTab, setSideTab] = useState<'chats' | 'calls'>('chats')
   const [musicOpen, setMusicOpen] = useState(false)
   const [musicMounted, setMusicMounted] = useState(false)
+  const [netflixOpen, setNetflixOpen] = useState(false)
+  const [netflixMounted, setNetflixMounted] = useState(false)
 
   const pickWallpaper = (id: string) => {
     setWallpaper(id)
@@ -364,6 +369,7 @@ export default function ChatPage() {
               </div>
             ) : (
               <MusicProvider conversationId={activeId}>
+                <ScreenShareProvider conversationId={activeId} peerId={otherUserId} peerName={activeConv?.name ?? 'Chat'} enabled={activeConv?.type === 'direct' && !!otherUserId}>
                 <div className="flex items-center gap-0.5 px-1 py-1 bg-[#f0f2f5] dark:bg-[#1f2c34] shrink-0">
                   <button onClick={() => setShowInfo((s) => !s)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
                     <span onClick={(e) => { e.stopPropagation(); setActiveId(null) }} className="md:hidden w-9 h-9 flex items-center justify-center text-gray-600 dark:text-zinc-300 shrink-0" aria-label="Back">
@@ -402,18 +408,32 @@ export default function ChatPage() {
                     title="Video call"
                     className="w-10 h-10 rounded-full hover:bg-black/5 dark:hover:bg-white/10 shrink-0 flex items-center justify-center text-gray-600 dark:text-zinc-300"
                   ><Video className="w-5 h-5" /></button>
+                  <ScreenShareButton />
+                  <button
+                    onClick={() => { setNetflixMounted(true); setNetflixOpen((o) => !o) }}
+                    title="Netflix · watch together"
+                    aria-label="Netflix watch together"
+                    className="w-10 h-10 rounded-full hover:bg-black/5 dark:hover:bg-white/10 shrink-0 flex items-center justify-center text-gray-600 dark:text-zinc-300"
+                  ><Tv2 className="w-5 h-5" /></button>
                 </div>
                 <div className="px-3 py-1 bg-[#f0f2f5] dark:bg-[#1f2c34] shrink-0">
                   <input className="w-full text-sm rounded-full px-3.5 py-1.5 outline-none bg-white dark:bg-[#2a3942] dark:text-zinc-100 placeholder:text-gray-400" placeholder="Search messages…" value={search} onChange={(e) => setSearch(e.target.value)} />
                 </div>
                 <MessageList messages={visibleMessages} onLoadMore={loadMore} hasMore={hasMore && !search} loadingMore={loadingMore} replyTo={replyTo} onReply={setReplyTo} wallpaper={wallpaperSrc(wallpaperId)} dark={dark} peerLastRead={peerLastRead} peerOnline={otherOnline} isDirect={activeConv?.type === 'direct'} />
                 <SharedPlayerBar />
+                <ScreenShareLayer />
                 <MessageComposer conversationId={activeId} replyTo={replyTo} onReply={setReplyTo} onSent={() => setRefreshKey((k) => k + 1)} />
                 {musicMounted && (
                   <Suspense fallback={null}>
                     <MusicPanel open={musicOpen} onClose={() => setMusicOpen(false)} />
                   </Suspense>
                 )}
+                {netflixMounted && (
+                  <Suspense fallback={null}>
+                    <NetflixPanel open={netflixOpen} onClose={() => setNetflixOpen(false)} />
+                  </Suspense>
+                )}
+                </ScreenShareProvider>
               </MusicProvider>
             )}
           </div>
