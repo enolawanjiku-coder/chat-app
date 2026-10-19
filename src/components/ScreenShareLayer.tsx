@@ -135,7 +135,12 @@ export function ScreenShareLayer() {
   }
 
   const label = isSharer ? 'Sharing your screen' : `${s.peerName} is sharing`
-  const sub = s.phase === 'failed' && s.error ? s.error : statusText(isSharer ? 'sharer' : 'viewer', s.phase, s.remoteHasAudio)
+  const sub =
+    s.signalStatus === 'error'
+      ? 'Signaling disconnected — check Realtime permissions (migration 0016).'
+      : s.phase === 'failed' && s.error
+        ? s.error
+        : statusText(isSharer ? 'sharer' : 'viewer', s.phase, s.remoteHasAudio)
 
   return (
     <>

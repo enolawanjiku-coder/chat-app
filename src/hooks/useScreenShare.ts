@@ -60,6 +60,7 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
   const [remoteHasAudio, setRemoteHasAudio] = useState(false)
   const [incoming, setIncoming] = useState<IncomingShare | null>(null)
   const [muted, setMuted] = useState(false)
+  const [signalStatus, setSignalStatus] = useState<'connecting' | 'ready' | 'error'>('connecting')
 
   const channelRef = useRef<RealtimeChannel | null>(null)
   const pcRef = useRef<RTCPeerConnection | null>(null)
@@ -284,7 +285,11 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
     bind('ice', onIce)
     bind('stop', onStop)
     bind('decline', onDecline)
-    channel.subscribe()
+    channel.subscribe((status) => {
+      if (!mountedRef.current) return
+      if (status === 'SUBSCRIBED') setSignalStatus('ready')
+      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setSignalStatus('error')
+    })
 
     return () => {
       channelRef.current = null
@@ -457,6 +462,7 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
     remoteHasAudio,
     incoming,
     muted,
+    signalStatus,
     startShare,
     stopShare,
     accept,
