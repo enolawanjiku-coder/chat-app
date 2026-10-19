@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Menu, Music, Phone, Users, Video, Tv2 } from 'lucide-react'
 import { supabase, missingSupabaseConfig } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
@@ -58,6 +58,7 @@ export default function ChatPage() {
   const { messages, loadMore, loadingMore, hasMore, refreshLatest } = useMessages(activeId)
   const { typingUsers } = useTyping(activeId, profile?.username ?? '')
   const { onlineIds } = usePresence(activeId)
+  const [searchParams] = useSearchParams()
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [activeConv, setActiveConv] = useState<Conversation | null>(null)
@@ -146,6 +147,12 @@ export default function ChatPage() {
       gone = true
     }
   }, [navigate, hydrated, userId])
+
+  // Deep link from a shared screen invite: /?conv=<id>&screen=<session>
+  useEffect(() => {
+    const conv = searchParams.get('conv')
+    if (conv) setActiveId(conv)
+  }, [searchParams, setActiveId])
 
   useEffect(() => {
     if (!activeId) {

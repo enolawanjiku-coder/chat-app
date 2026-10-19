@@ -1,11 +1,35 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, CheckCheck, ListMusic, Loader2, Lock, Pause, Phone, Play } from 'lucide-react'
+import { Check, CheckCheck, ListMusic, Loader2, Lock, MonitorPlay, Pause, Phone, Play } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Message } from '../lib/types'
 import { useAuthStore } from '../store/authStore'
 import { findYouTubeLink, youTubeThumbnail, type YouTubeLink } from '../lib/youtube'
+import { buildScreenShareUrl, findScreenShareSession } from '../lib/screenShare'
 import { MessageReactions } from './MessageReactions'
 import { useMusic } from './MusicProvider'
+
+function ScreenShareCard({ conversationId, sessionId }: { conversationId: string; sessionId: string }) {
+  return (
+    <div className="my-1 rounded-xl overflow-hidden border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5">
+      <div className="flex items-center gap-2 p-2">
+        <span className="w-10 h-10 rounded-full shrink-0 bg-brand-500/15 text-brand-600 flex items-center justify-center">
+          <MonitorPlay className="w-5 h-5" />
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-medium text-gray-800 dark:text-zinc-200">Live screen share</p>
+          <p className="text-[11px] text-gray-400 truncate">Open this chat to receive the invite</p>
+        </div>
+        <a
+          href={buildScreenShareUrl(conversationId, sessionId)}
+          className="shrink-0 flex items-center gap-1 text-[12px] font-semibold text-white bg-brand-500 rounded-full px-3 py-1.5"
+        >
+          <MonitorPlay className="w-3.5 h-3.5" />
+          Join
+        </a>
+      </div>
+    </div>
+  )
+}
 
 function YouTubeCard({ link }: { link: YouTubeLink }) {
   const music = useMusic()
@@ -259,6 +283,7 @@ export function MessageList({
         const mine = m.sender_id === userId
         const quoted = m.reply_to ? byId.get(m.reply_to) : null
         const yt = m.type === 'text' && !m.deleted_at ? findYouTubeLink(m.body) : null
+        const screenSession = m.type === 'text' && !m.deleted_at ? findScreenShareSession(m.body) : null
         const day = dayLabel(m.created_at)
         const showDay = day !== lastDay
         lastDay = day
@@ -307,9 +332,10 @@ export function MessageList({
                   <div className="py-1"><ImageBubble path={m.image_path} onOpen={setLightbox} /></div>
                 ) : m.type === 'audio' && m.audio_path ? (
                   <AudioBubble path={m.audio_path} mine={mine} />
-                ) : (
+                ) : screenSession ? null : (
                   <p className="whitespace-pre-wrap break-words px-1">{m.body}</p>
                 )}
+                {!m.deleted_at && screenSession && <ScreenShareCard conversationId={m.conversation_id} sessionId={screenSession} />}
                 {!m.deleted_at && yt && <YouTubeCard link={yt} />}
                 <div className="flex justify-end items-center gap-1 -mt-0.5">
                   <span className="text-[10px] text-gray-500 dark:text-zinc-400">

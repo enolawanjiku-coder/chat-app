@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { buildScreenShareMessage } from '../lib/screenShare'
 import { useAuthStore } from '../store/authStore'
 
 export type ScreenShareRole = 'sharer' | 'viewer' | null
@@ -72,6 +73,7 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
   const mutedRef = useRef(false)
   const mountedRef = useRef(true)
   const stopShareRef = useRef<(() => void) | null>(null)
+  const reofferRef = useRef<number | null>(null)
 
   const userRef = useRef(userId)
   userRef.current = userId
@@ -122,6 +124,10 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
   }, [])
 
   const resetLocal = useCallback(() => {
+    if (reofferRef.current !== null) {
+      window.clearInterval(reofferRef.current)
+      reofferRef.current = null
+    }
     const pc = pcRef.current
     if (pc) {
       pc.onicecandidate = null
@@ -402,12 +408,46 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
       return
     }
 
-    window.setTimeout(() => {
-      if (sessionRef.current === sessionId && pcRef.current?.connectionState !== 'connected') {
-        if (mountedRef.current) setError('No response from the other person. Make sure they are active in this chat on a different account, then try again.')
-        stopShareRef.current?.()
+    // Persist an invite so members who are offline still receive it and can
+    // open the chat to join once they are back online.
+    const convId = convRef.current
+    if (convId && userRef.current) {
+      void supabase.from('messages').insert({
+        conversation_id: convId,
+        sender_id: userRef.current,
+        type: 'text',
+        body: buildScreenShareMessage(convId, sessionId),
+      })
+    }
+
+    // Keep offering until the viewer connects (instead of cancelling after a
+    // timeout), so a late or offline joiner still gets the prompt.
+    reofferRef.current = window.setInterval(() => {
+      const active = pcRef.current
+      if (sessionRef.current !== sessionId || !active) return
+      if (active.connectionState === 'connected') {
+        if (reofferRef.current !== null) {
+          window.clearInterval(reofferRef.current)
+          reofferRef.current = null
+        }
+        return
       }
-    }, 30000)
+      void (async () => {
+        try {
+          const next = await active.createOffer()
+          await active.setLocalDescription(next)
+          sendSignal('offer', {
+            sessionId,
+            from: userRef.current,
+            fromName: nameRef.current,
+            to: peerRef.current,
+            sdp: next,
+          })
+        } catch {
+          /* retry on the next tick */
+        }
+      })()
+    }, 6000)
   }, [resetLocal, sendSignal, wirePc])
 
   const stopShare = useCallback(() => {
