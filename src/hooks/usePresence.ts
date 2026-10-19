@@ -11,7 +11,7 @@ export function usePresence(conversationId: string | null) {
   useEffect(() => {
     if (!conversationId || !userId) return
     const channel = supabase.channel(`presence:${conversationId}`, {
-      config: { presence: { key: userId } },
+      config: { private: true, presence: { key: userId } },
     })
     channel
       .on('presence', { event: 'sync' }, () => {

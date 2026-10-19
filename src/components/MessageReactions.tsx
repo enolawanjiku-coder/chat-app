@@ -17,7 +17,7 @@ export function MessageReactions({ messageId, mine }: { messageId: string; mine:
       setReactions((data ?? []) as Reaction[])
     })
     const channel = supabase
-      .channel(`reactions:${messageId}`)
+      .channel(`reactions:${messageId}`, { config: { private: true } })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions', filter: `message_id=eq.${messageId}` }, (payload) => {
         if (payload.eventType === 'INSERT') {
           setReactions((prev) => [...prev, payload.new as Reaction])

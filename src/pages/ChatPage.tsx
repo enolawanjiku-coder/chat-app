@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Menu, Phone, Users, Video } from 'lucide-react'
+import { ArrowLeft, Menu, Music, Phone, Users, Video } from 'lucide-react'
 import { supabase, missingSupabaseConfig } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
@@ -25,6 +25,7 @@ import { CallHistory } from '../components/CallHistory'
 const CallOverlay = lazy(() => import('../components/CallOverlay').then((m) => ({ default: m.CallOverlay })))
 const GroupInfo = lazy(() => import('../components/GroupInfo').then((m) => ({ default: m.GroupInfo })))
 const SettingsDrawer = lazy(() => import('../components/SettingsDrawer').then((m) => ({ default: m.SettingsDrawer })))
+const MusicPanel = lazy(() => import('../components/MusicPanel').then((m) => ({ default: m.MusicPanel })))
 
 function SplashGate() {
   const [slow, setSlow] = useState(false)
@@ -98,6 +99,8 @@ export default function ChatPage() {
   const [wallpaperId, setWallpaperId] = useState(getWallpaper)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [sideTab, setSideTab] = useState<'chats' | 'calls'>('chats')
+  const [musicOpen, setMusicOpen] = useState(false)
+  const [musicMounted, setMusicMounted] = useState(false)
 
   const pickWallpaper = (id: string) => {
     setWallpaper(id)
@@ -187,7 +190,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (!activeId) return
     const channel = supabase
-      .channel(`read:${activeId}`)
+      .channel(`read:${activeId}`, { config: { private: true } })
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'conversation_members', filter: `conversation_id=eq.${activeId}` },
@@ -200,7 +203,7 @@ export default function ChatPage() {
   }, [activeId])
 
   useEffect(() => {
-    const channel = supabase.channel('chat-page-bump').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
+    const channel = supabase.channel('chat-page-bump', { config: { private: true } }).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
       setRefreshKey((k) => k + 1)
     })
     channel.subscribe()
@@ -301,9 +304,19 @@ export default function ChatPage() {
           <img src="/logo.jpg" className="w-9 h-9 rounded-full object-cover bg-white" alt="logo" />
           <h1 className="font-bold text-[17px] truncate">substack <span className="font-light">connect</span></h1>
         </div>
-        <Link to="/profile" title="Profile" className="h-10 px-2 rounded-full hover:bg-white/10 flex items-center text-sm font-medium max-w-32 truncate">
-          @{profile?.username ?? '…'}
-        </Link>
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={() => { setMusicMounted(true); setMusicOpen((o) => !o) }}
+            title="Music"
+            aria-label="Music"
+            className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center"
+          >
+            <Music className="w-5 h-5" />
+          </button>
+          <Link to="/profile" title="Profile" className="h-10 px-2 rounded-full hover:bg-white/10 flex items-center text-sm font-medium max-w-32 truncate">
+            @{profile?.username ?? '…'}
+          </Link>
+        </div>
       </header>
 
       {!isOnline && <div className="bg-amber-400 text-amber-950 text-xs px-4 py-1.5 text-center font-medium shrink-0">Offline — reconnecting…</div>}
@@ -434,6 +447,16 @@ export default function ChatPage() {
         onLogout={logout}
       />
       </Suspense>
+      {musicMounted && (
+        <Suspense fallback={null}>
+          <MusicPanel
+            conversationId={activeId}
+            conversationType={activeConv?.type}
+            open={musicOpen}
+            onClose={() => setMusicOpen(false)}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }

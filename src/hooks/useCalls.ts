@@ -53,7 +53,7 @@ export function useCalls() {
   }, [])
 
   const send = useCallback((conversationId: string, event: string, payload: Record<string, unknown>) => {
-    supabase.channel(`call:${conversationId}`).send({ type: 'broadcast', event, payload })
+    supabase.channel(`call:${conversationId}`, { config: { private: true } }).send({ type: 'broadcast', event, payload })
   }, [])
 
   // shared peer-connection wiring: tracks, ICE, connection state
@@ -137,7 +137,7 @@ export function useCalls() {
       const { data: memberships } = await supabase.from('conversation_members').select('conversation_id').eq('user_id', userId)
       const ids = [...new Set(((memberships ?? []) as { conversation_id: string }[]).map((m) => m.conversation_id))]
       channels = ids.map((convId) => {
-        const ch = supabase.channel(`call:${convId}`, { config: { broadcast: { self: false } } })
+        const ch = supabase.channel(`call:${convId}`, { config: { private: true, broadcast: { self: false } } })
         ch.on('broadcast', { event: 'ring' }, ({ payload }) => {
           const p = payload as unknown as IncomingCall
           if (p.from === userRef.current || activeRef.current || incomingRef.current) return

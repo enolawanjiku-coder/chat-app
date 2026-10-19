@@ -7,7 +7,7 @@ export function useTyping(conversationId: string | null, username: string) {
   useEffect(() => {
     if (!conversationId) return
     const channel = supabase.channel(`typing:${conversationId}`, {
-      config: { broadcast: { self: false } },
+      config: { private: true, broadcast: { self: false } },
     })
     channel
       .on('broadcast', { event: 'typing' }, (payload) => {
@@ -26,7 +26,7 @@ export function useTyping(conversationId: string | null, username: string) {
 
   const sendTyping = () => {
     if (!conversationId) return
-    supabase.channel(`typing:${conversationId}`).send({
+    supabase.channel(`typing:${conversationId}`, { config: { private: true } }).send({
       type: 'broadcast',
       event: 'typing',
       payload: { username },
