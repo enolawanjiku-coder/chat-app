@@ -145,6 +145,67 @@ export function youTubeWatchUrl(videoId: string): string {
   return `https://www.youtube.com/watch?v=${videoId}`
 }
 
+export function youTubeThumbnail(videoId: string): string {
+  return `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`
+}
+
+// ── Link parsing (video and/or playlist) ─────────────────────────────────────
+export type YouTubeLink = { videoId: string | null; playlistId: string | null }
+
+const PLAYLIST_ID_RE = /^[A-Za-z0-9_-]{12,}$/
+
+/** Parses a raw id or any YouTube URL into its video id and/or playlist id. */
+export function parseYouTubeLink(input: string): YouTubeLink {
+  const result: YouTubeLink = { videoId: null, playlistId: null }
+  const raw = (input ?? '').trim()
+  if (!raw) return result
+  if (VIDEO_ID_RE.test(raw)) {
+    result.videoId = raw
+    return result
+  }
+
+  let url: URL
+  try {
+    url = new URL(raw.startsWith('http') ? raw : `https://${raw}`)
+  } catch {
+    return result
+  }
+  const host = url.hostname.replace(/^www\./, '').replace(/^m\./, '')
+
+  const v = url.searchParams.get('v')
+  if (v && VIDEO_ID_RE.test(v)) result.videoId = v
+  const list = url.searchParams.get('list')
+  if (list && PLAYLIST_ID_RE.test(list)) result.playlistId = list
+
+  const segments = url.pathname.split('/').filter(Boolean)
+  if (!result.videoId) {
+    if (host === 'youtu.be' && segments[0] && VIDEO_ID_RE.test(segments[0])) {
+      result.videoId = segments[0]
+    } else if (['youtube.com', 'music.youtube.com', 'youtube-nocookie.com'].includes(host)) {
+      const marker = segments.findIndex((s) => s === 'embed' || s === 'shorts' || s === 'live' || s === 'v')
+      if (marker >= 0) {
+        const candidate = segments[marker + 1]
+        if (candidate && VIDEO_ID_RE.test(candidate)) result.videoId = candidate
+      }
+    }
+  }
+  return result
+}
+
+const URL_IN_TEXT_RE = /https?:\/\/[^\s<>"']+/gi
+
+/** Finds the first YouTube link (video or playlist) inside a text message. */
+export function findYouTubeLink(text: string | null | undefined): YouTubeLink | null {
+  if (!text) return null
+  const matches = text.match(URL_IN_TEXT_RE)
+  if (!matches) return null
+  for (const raw of matches) {
+    const link = parseYouTubeLink(raw.replace(/[),.;!?]+$/, ''))
+    if (link.videoId || link.playlistId) return link
+  }
+  return null
+}
+
 /** Human message for the IFrame API onError codes. */
 export function youTubeErrorMessage(code: number): string {
   switch (code) {
@@ -241,4 +302,56 @@ export async function searchYouTube(query: string, signal?: AbortSignal): Promis
       }
     })
     .filter((r): r is YouTubeSearchResult => r !== null)
+}
+
+export type YouTubePlaylistTrack = { videoId: string; title: string }
+
+/** Loads up to 50 items of a public playlist so it can be shared as a queue. */
+export async function fetchPlaylistItems(playlistId: string, signal?: AbortSignal): Promise<YouTubePlaylistTrack[]> {
+  if (!searchEnabled) throw new Error('Loading playlists needs a YouTube Data API key (VITE_YOUTUBE_API_KEY).')
+  if (!PLAYLIST_ID_RE.test(playlistId)) throw new Error('That playlist link looks invalid.')
+
+  const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems')
+  url.searchParams.set('part', 'snippet')
+  url.searchParams.set('maxResults', '50')
+  url.searchParams.set('playlistId', playlistId)
+  url.searchParams.set('key', youTubeApiKey)
+
+  let res: Response
+  try {
+    res = await fetch(url.toString(), { signal })
+  } catch (err) {
+    if ((err as { name?: string } | null)?.name === 'AbortError') throw err
+    throw new Error('Could not reach YouTube. Check your connection.')
+  }
+
+  if (!res.ok) {
+    let reason = ''
+    try {
+      const body = (await res.json()) as { error?: { errors?: { reason?: string }[]; message?: string } }
+      reason = body.error?.errors?.[0]?.reason ?? body.error?.message ?? ''
+    } catch {
+      // ignore non-JSON error bodies
+    }
+    if (res.status === 403 && /quota|daily/i.test(reason)) throw new Error('YouTube quota reached for today. Try again later.')
+    if (res.status === 400 || res.status === 403) throw new Error('YouTube key is missing, invalid, or the Data API is not enabled.')
+    if (res.status === 404) throw new Error('That playlist is private or does not exist.')
+    throw new Error('Could not load the playlist. Try again.')
+  }
+
+  const body = (await res.json()) as {
+    items?: { snippet?: { title?: string; resourceId?: { videoId?: string } } }[]
+  }
+
+  const seen = new Set<string>()
+  const out: YouTubePlaylistTrack[] = []
+  for (const item of body.items ?? []) {
+    const videoId = item.snippet?.resourceId?.videoId
+    const title = decodeEntities(item.snippet?.title ?? '').trim()
+    if (!isValidVideoId(videoId) || seen.has(videoId)) continue
+    if (title === 'Private video' || title === 'Deleted video') continue
+    seen.add(videoId)
+    out.push({ videoId, title: title || videoId })
+  }
+  return out
 }

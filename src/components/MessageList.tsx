@@ -1,9 +1,63 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, CheckCheck, Lock, Pause, Phone, Play } from 'lucide-react'
+import { Check, CheckCheck, ListMusic, Loader2, Lock, Pause, Phone, Play } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Message } from '../lib/types'
 import { useAuthStore } from '../store/authStore'
+import { findYouTubeLink, youTubeThumbnail, type YouTubeLink } from '../lib/youtube'
 import { MessageReactions } from './MessageReactions'
+import { useMusic } from './MusicProvider'
+
+function YouTubeCard({ link }: { link: YouTubeLink }) {
+  const music = useMusic()
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const isActive =
+    (!!link.videoId && music.state.videoId === link.videoId) ||
+    (!!link.playlistId && music.state.playlistId === link.playlistId)
+
+  const start = async () => {
+    if (busy) return
+    setBusy(true)
+    setErr(null)
+    try {
+      await music.startFromLink(link)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not play that link.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="my-1 rounded-xl overflow-hidden border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5">
+      <div className="flex items-center gap-2 p-2">
+        {link.videoId ? (
+          <img src={youTubeThumbnail(link.videoId)} alt="" loading="lazy" className="w-20 h-11 rounded object-cover shrink-0 bg-black/20" />
+        ) : (
+          <span className="w-20 h-11 rounded shrink-0 bg-black/20 flex items-center justify-center text-gray-500 dark:text-zinc-400">
+            <ListMusic className="w-6 h-6" />
+          </span>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-medium truncate text-gray-800 dark:text-zinc-200">
+            {link.playlistId ? 'YouTube playlist' : 'YouTube video'}
+          </p>
+          <p className="text-[11px] text-gray-400 truncate">{isActive ? 'Playing for everyone' : 'Watch together'}</p>
+        </div>
+        <button
+          onClick={() => void start()}
+          disabled={busy}
+          className="shrink-0 flex items-center gap-1 text-[12px] font-semibold text-white bg-brand-500 disabled:opacity-50 rounded-full px-3 py-1.5"
+        >
+          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+          {isActive ? 'Playing' : 'Play'}
+        </button>
+      </div>
+      {err && <p className="px-2 pb-1 text-[11px] text-red-600">{err}</p>}
+    </div>
+  )
+}
 
 function ImageBubble({ path, onOpen }: { path: string; onOpen: (url: string) => void }) {
   const [url, setUrl] = useState<string | null>(null)
@@ -204,6 +258,7 @@ export function MessageList({
       {messages.map((m) => {
         const mine = m.sender_id === userId
         const quoted = m.reply_to ? byId.get(m.reply_to) : null
+        const yt = m.type === 'text' && !m.deleted_at ? findYouTubeLink(m.body) : null
         const day = dayLabel(m.created_at)
         const showDay = day !== lastDay
         lastDay = day
@@ -255,6 +310,7 @@ export function MessageList({
                 ) : (
                   <p className="whitespace-pre-wrap break-words px-1">{m.body}</p>
                 )}
+                {!m.deleted_at && yt && <YouTubeCard link={yt} />}
                 <div className="flex justify-end items-center gap-1 -mt-0.5">
                   <span className="text-[10px] text-gray-500 dark:text-zinc-400">
                     {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

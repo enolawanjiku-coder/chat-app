@@ -6,62 +6,94 @@ import { isValidVideoId } from '../lib/youtube'
 
 export type MusicTrack = { videoId: string; title?: string; by?: string; byName?: string }
 
-export type GroupMusicState = {
+export type SharedMusicState = {
   videoId: string | null
+  title: string | null
+  playlistId: string | null
   isPlaying: boolean
   position: number
   at: number
   queue: MusicTrack[]
+  history: MusicTrack[]
   updatedBy: string | null
   updatedByName: string | null
 }
 
-export type GroupMusicStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error'
+export type SharedMusicStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error'
 
-const EMPTY: GroupMusicState = { videoId: null, isPlaying: false, position: 0, at: 0, queue: [], updatedBy: null, updatedByName: null }
+const EMPTY: SharedMusicState = {
+  videoId: null,
+  title: null,
+  playlistId: null,
+  isPlaying: false,
+  position: 0,
+  at: 0,
+  queue: [],
+  history: [],
+  updatedBy: null,
+  updatedByName: null,
+}
+
 const HEARTBEAT_MS = 10000
-const MAX_QUEUE = 50
+const MAX_QUEUE = 100
+const MAX_HISTORY = 100
 
 type MusicSessionRow = {
-  conversation_id: string
   video_id: string | null
+  title: string | null
+  playlist_id: string | null
   is_playing: boolean
   position_s: number
   queue: unknown
+  history: unknown
   updated_by: string | null
 }
 
 type SyncPayload = {
   videoId?: unknown
+  title?: unknown
+  playlistId?: unknown
   isPlaying?: unknown
   position?: unknown
   queue?: unknown
+  history?: unknown
   by?: unknown
   byName?: unknown
   origin?: unknown
   rid?: unknown
-  title?: unknown
 }
 
-function sanitizeQueue(value: unknown): MusicTrack[] {
+function sanitizeTracks(value: unknown, limit: number): MusicTrack[] {
   if (!Array.isArray(value)) return []
-  return value
-    .filter((t): t is MusicTrack => !!t && typeof t === 'object' && isValidVideoId((t as MusicTrack).videoId))
-    .slice(0, MAX_QUEUE)
-    .map((t) => ({ videoId: t.videoId, title: typeof t.title === 'string' ? t.title.slice(0, 200) : undefined, by: typeof t.by === 'string' ? t.by : undefined, byName: typeof t.byName === 'string' ? t.byName.slice(0, 80) : undefined }))
+  const out: MusicTrack[] = []
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') continue
+    const t = raw as { videoId?: unknown; title?: unknown; by?: unknown; byName?: unknown }
+    if (typeof t.videoId === 'string' && isValidVideoId(t.videoId)) {
+      out.push({
+        videoId: t.videoId,
+        title: typeof t.title === 'string' ? t.title.slice(0, 200) : undefined,
+        by: typeof t.by === 'string' ? t.by : undefined,
+        byName: typeof t.byName === 'string' ? t.byName.slice(0, 80) : undefined,
+      })
+    }
+    if (out.length >= limit) break
+  }
+  return out
 }
 
 /**
- * Group listening powered by a *private* Supabase Realtime channel
- * (`music:<conversation_id>`). Membership is enforced server-side by the
- * policies added in migration 0014. Playback events are broadcast; a durable
- * snapshot in `music_sessions` bootstraps late joiners even if no one is online.
+ * Shared listening for a conversation (direct or group), powered by a *private*
+ * Supabase Realtime channel (`music:<conversation_id>`). Membership is enforced
+ * by the `realtime.messages` policies from migration 0014. Playback is
+ * broadcast as a single `sync` snapshot; a durable `music_sessions` row
+ * bootstraps late joiners even when no one is online.
  */
-export function useGroupMusic(conversationId: string | null, enabled: boolean, getPosition?: () => number) {
+export function useSharedMusic(conversationId: string | null, enabled: boolean, getPosition?: () => number) {
   const userId = useAuthStore((s) => s.userId)
   const profile = useAuthStore((s) => s.profile)
-  const [state, setState] = useState<GroupMusicState>(EMPTY)
-  const [status, setStatus] = useState<GroupMusicStatus>('idle')
+  const [state, setState] = useState<SharedMusicState>(EMPTY)
+  const [status, setStatus] = useState<SharedMusicStatus>('idle')
   const [participants, setParticipants] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -78,9 +110,9 @@ export function useGroupMusic(conversationId: string | null, enabled: boolean, g
   const getPositionRef = useRef<(() => number) | undefined>(getPosition)
   getPositionRef.current = getPosition
 
-  const livePosition = useCallback((s: GroupMusicState): number => {
+  const livePosition = useCallback((s: SharedMusicState): number => {
     if (s.isPlaying && getPositionRef.current) return Math.max(0, getPositionRef.current())
-    return s.position
+    return Math.max(0, s.position)
   }, [])
 
   const send = useCallback((event: string, payload: Record<string, unknown>) => {
@@ -88,14 +120,17 @@ export function useGroupMusic(conversationId: string | null, enabled: boolean, g
   }, [])
 
   const persist = useCallback(
-    async (s: GroupMusicState) => {
+    async (s: SharedMusicState) => {
       if (!conversationId || !userIdRef.current) return
       await supabase.from('music_sessions').upsert({
         conversation_id: conversationId,
         video_id: s.videoId,
+        title: s.title,
+        playlist_id: s.playlistId,
         is_playing: s.isPlaying,
         position_s: s.position,
         queue: s.queue,
+        history: s.history,
         updated_by: userIdRef.current,
         updated_at: new Date().toISOString(),
       })
@@ -105,30 +140,36 @@ export function useGroupMusic(conversationId: string | null, enabled: boolean, g
 
   const applyPayload = useCallback((payload: SyncPayload) => {
     const videoId = typeof payload.videoId === 'string' && isValidVideoId(payload.videoId) ? payload.videoId : null
-    if (!videoId) return
+    if (!videoId) {
+      setState(EMPTY)
+      return
+    }
     if (typeof payload.rid === 'string') respondedRidRef.current = payload.rid
     if (typeof payload.origin === 'string') controllerRef.current = payload.origin
-    setState((prev) => ({
+    setState({
       videoId,
+      title: typeof payload.title === 'string' ? payload.title : null,
+      playlistId: typeof payload.playlistId === 'string' ? payload.playlistId : null,
       isPlaying: payload.isPlaying === true,
       position: typeof payload.position === 'number' && Number.isFinite(payload.position) ? Math.max(0, payload.position) : 0,
       at: Date.now(),
-      queue: payload.queue !== undefined ? sanitizeQueue(payload.queue) : prev.queue,
+      queue: sanitizeTracks(payload.queue, MAX_QUEUE),
+      history: sanitizeTracks(payload.history, MAX_HISTORY),
       updatedBy: typeof payload.by === 'string' ? payload.by : null,
       updatedByName: typeof payload.byName === 'string' ? payload.byName : null,
-    }))
+    })
   }, [])
 
-  // Subscribe / resubscribe whenever the group session scope changes.
+  // Subscribe / resubscribe whenever the conversation scope changes.
   useEffect(() => {
     if (!enabled || !conversationId || !userId) {
       setStatus('idle')
       setParticipants([])
+      setState(EMPTY)
       return
     }
     let cancelled = false
 
-    // New scope: drop any state carried over from a previous conversation.
     setState(EMPTY)
     setParticipants([])
 
@@ -140,15 +181,16 @@ export function useGroupMusic(conversationId: string | null, enabled: boolean, g
       if (row.video_id && isValidVideoId(row.video_id)) {
         setState({
           videoId: row.video_id,
+          title: row.title ?? null,
+          playlistId: row.playlist_id ?? null,
           isPlaying: row.is_playing === true,
           position: Number(row.position_s) || 0,
           at: Date.now(),
-          queue: sanitizeQueue(row.queue),
+          queue: sanitizeTracks(row.queue, MAX_QUEUE),
+          history: sanitizeTracks(row.history, MAX_HISTORY),
           updatedBy: row.updated_by,
           updatedByName: null,
         })
-      } else if (Array.isArray(row.queue) && row.queue.length) {
-        setState((prev) => ({ ...prev, queue: sanitizeQueue(row.queue) }))
       }
     })()
 
@@ -173,11 +215,14 @@ export function useGroupMusic(conversationId: string | null, enabled: boolean, g
         const current = stateRef.current
         if (!current.videoId) return
         respondedRidRef.current = rid
-        send('state', {
+        send('sync', {
           videoId: current.videoId,
+          title: current.title,
+          playlistId: current.playlistId,
           isPlaying: current.isPlaying,
           position: livePosition(current),
           queue: current.queue,
+          history: current.history,
           by: current.updatedBy,
           byName: current.updatedByName,
           origin: originRef.current,
@@ -187,16 +232,8 @@ export function useGroupMusic(conversationId: string | null, enabled: boolean, g
     }
 
     channel
-      .on('broadcast', { event: 'state' }, onSync)
-      .on('broadcast', { event: 'play' }, onSync)
-      .on('broadcast', { event: 'pause' }, onSync)
-      .on('broadcast', { event: 'seek' }, onSync)
-      .on('broadcast', { event: 'track' }, onSync)
+      .on('broadcast', { event: 'sync' }, onSync)
       .on('broadcast', { event: 'request' }, onRequest)
-      .on('broadcast', { event: 'queue' }, ({ payload }: { payload: SyncPayload }) => {
-        if (typeof payload?.origin === 'string') controllerRef.current = payload.origin
-        setState((prev) => ({ ...prev, queue: sanitizeQueue(payload?.queue) }))
-      })
       .on('broadcast', { event: 'end' }, () => {
         controllerRef.current = null
         setState(EMPTY)
@@ -228,17 +265,20 @@ export function useGroupMusic(conversationId: string | null, enabled: boolean, g
     }
   }, [enabled, conversationId, userId, applyPayload, send, livePosition])
 
-  // Keep the group anchored: only the last actor (controller) emits heartbeats,
-  // which lets everyone else correct drift.
+  // Only the last actor (controller) emits heartbeats, letting others correct drift.
   useEffect(() => {
     if (!enabled || status !== 'connected') return
     const id = window.setInterval(() => {
       const current = stateRef.current
       if (controllerRef.current !== userIdRef.current || !current.videoId) return
-      send('state', {
+      send('sync', {
         videoId: current.videoId,
+        title: current.title,
+        playlistId: current.playlistId,
         isPlaying: current.isPlaying,
         position: livePosition(current),
+        queue: current.queue,
+        history: current.history,
         origin: originRef.current,
       })
     }, HEARTBEAT_MS)
@@ -246,15 +286,17 @@ export function useGroupMusic(conversationId: string | null, enabled: boolean, g
   }, [enabled, status, send, livePosition])
 
   const emit = useCallback(
-    (event: string, patch: Partial<GroupMusicState>, extra?: Record<string, unknown>) => {
-      const next: GroupMusicState = { ...stateRef.current, ...patch }
+    (next: SharedMusicState, extra?: Record<string, unknown>) => {
       controllerRef.current = userIdRef.current
       setState(next)
-      send(event, {
+      send('sync', {
         videoId: next.videoId,
+        title: next.title,
+        playlistId: next.playlistId,
         isPlaying: next.isPlaying,
         position: next.position,
         queue: next.queue,
+        history: next.history,
         by: userIdRef.current,
         byName: profileNameRef.current,
         origin: originRef.current,
@@ -265,53 +307,117 @@ export function useGroupMusic(conversationId: string | null, enabled: boolean, g
     [send, persist],
   )
 
-  const startTrack = useCallback(
+  const currentTrack = useCallback((s: SharedMusicState): MusicTrack => ({
+    videoId: s.videoId as string,
+    title: s.title ?? undefined,
+    by: s.updatedBy ?? undefined,
+    byName: s.updatedByName ?? undefined,
+  }), [])
+
+  const startVideo = useCallback(
     (videoId: string, title?: string) => {
       if (!isValidVideoId(videoId)) return
-      emit('track', { videoId, isPlaying: true, position: 0, updatedByName: profileNameRef.current }, { title })
+      emit({ ...EMPTY, videoId, title: title ?? null, isPlaying: true, position: 0, at: Date.now(), updatedBy: userIdRef.current, updatedByName: profileNameRef.current })
+    },
+    [emit],
+  )
+
+  const startPlaylist = useCallback(
+    (playlistId: string, tracks: MusicTrack[], startIndex = 0) => {
+      const list = sanitizeTracks(tracks, MAX_QUEUE)
+      if (list.length === 0) return
+      const i = Math.min(Math.max(0, startIndex), list.length - 1)
+      const current = list[i]
+      emit({
+        ...EMPTY,
+        videoId: current.videoId,
+        title: current.title ?? null,
+        playlistId,
+        isPlaying: true,
+        position: 0,
+        at: Date.now(),
+        queue: list.slice(i + 1),
+        history: list.slice(0, i),
+        updatedBy: userIdRef.current,
+        updatedByName: profileNameRef.current,
+      })
     },
     [emit],
   )
 
   const setPlaying = useCallback(
     (isPlaying: boolean, position: number) => {
-      if (!stateRef.current.videoId) return
-      emit(isPlaying ? 'play' : 'pause', { isPlaying, position: Math.max(0, position) })
+      const s = stateRef.current
+      if (!s.videoId) return
+      emit({ ...s, isPlaying, position: Math.max(0, position), at: Date.now() })
     },
     [emit],
   )
 
   const seek = useCallback(
     (position: number) => {
-      if (!stateRef.current.videoId) return
-      emit('seek', { position: Math.max(0, position) })
+      const s = stateRef.current
+      if (!s.videoId) return
+      emit({ ...s, position: Math.max(0, position), at: Date.now() })
     },
     [emit],
   )
 
+  const next = useCallback(() => {
+    const s = stateRef.current
+    if (!s.videoId) return
+    if (s.queue.length === 0) {
+      emit({ ...s, isPlaying: false, position: 0, at: Date.now() })
+      return
+    }
+    const cur = currentTrack(s)
+    const [head, ...rest] = s.queue
+    emit({
+      ...s,
+      videoId: head.videoId,
+      title: head.title ?? null,
+      queue: rest,
+      history: [...s.history, cur].slice(-MAX_HISTORY),
+      isPlaying: true,
+      position: 0,
+      at: Date.now(),
+    })
+  }, [emit, currentTrack])
+
+  const prev = useCallback(() => {
+    const s = stateRef.current
+    if (!s.videoId || s.history.length === 0) return
+    const cur = currentTrack(s)
+    const back = s.history[s.history.length - 1]
+    emit({
+      ...s,
+      videoId: back.videoId,
+      title: back.title ?? null,
+      history: s.history.slice(0, -1),
+      queue: [cur, ...s.queue].slice(0, MAX_QUEUE),
+      isPlaying: true,
+      position: 0,
+      at: Date.now(),
+    })
+  }, [emit, currentTrack])
+
   const addToQueue = useCallback(
     (track: MusicTrack) => {
       if (!isValidVideoId(track.videoId)) return
-      const current = stateRef.current.queue
-      if (current.some((t) => t.videoId === track.videoId)) return
-      const queue = [...current, { ...track, by: userIdRef.current ?? undefined, byName: profileNameRef.current ?? undefined }].slice(-MAX_QUEUE)
-      controllerRef.current = userIdRef.current
-      setState((prev) => ({ ...prev, queue }))
-      send('queue', { queue, by: userIdRef.current, origin: originRef.current })
-      void persist({ ...stateRef.current, queue })
+      const s = stateRef.current
+      if (s.queue.some((t) => t.videoId === track.videoId) || s.videoId === track.videoId) return
+      const queue = [...s.queue, { ...track, by: track.by ?? userIdRef.current ?? undefined, byName: track.byName ?? profileNameRef.current ?? undefined }].slice(-MAX_QUEUE)
+      emit({ ...s, queue })
     },
-    [send, persist],
+    [emit],
   )
 
   const removeFromQueue = useCallback(
     (videoId: string) => {
-      const queue = stateRef.current.queue.filter((t) => t.videoId !== videoId)
-      controllerRef.current = userIdRef.current
-      setState((prev) => ({ ...prev, queue }))
-      send('queue', { queue, by: userIdRef.current, origin: originRef.current })
-      void persist({ ...stateRef.current, queue })
+      const s = stateRef.current
+      emit({ ...s, queue: s.queue.filter((t) => t.videoId !== videoId) })
     },
-    [send, persist],
+    [emit],
   )
 
   const endSession = useCallback(async () => {
@@ -325,6 +431,9 @@ export function useGroupMusic(conversationId: string | null, enabled: boolean, g
     send('request', { rid: crypto.randomUUID(), by: userIdRef.current })
   }, [send])
 
+  const play = useCallback((position?: number) => setPlaying(true, position ?? livePosition(stateRef.current)), [setPlaying, livePosition])
+  const pause = useCallback((position?: number) => setPlaying(false, position ?? livePosition(stateRef.current)), [setPlaying, livePosition])
+
   return {
     state,
     status,
@@ -332,10 +441,13 @@ export function useGroupMusic(conversationId: string | null, enabled: boolean, g
     error,
     controller: controllerRef.current,
     isController: controllerRef.current === userId,
-    startTrack,
-    play: (position?: number) => setPlaying(true, position ?? livePosition(stateRef.current)),
-    pause: (position?: number) => setPlaying(false, position ?? livePosition(stateRef.current)),
+    startVideo,
+    startPlaylist,
+    play,
+    pause,
     seek,
+    next,
+    prev,
     addToQueue,
     removeFromQueue,
     endSession,

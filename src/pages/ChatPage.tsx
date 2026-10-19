@@ -19,6 +19,8 @@ import { MessageComposer } from '../components/MessageComposer'
 import { NewChatDialog } from '../components/NewChatDialog'
 import { StatusRow } from '../components/StatusRow'
 import { CallHistory } from '../components/CallHistory'
+import { MusicProvider } from '../components/MusicProvider'
+import { SharedPlayerBar } from '../components/SharedPlayerBar'
 
 // heavy below-fold overlays load after first paint (smaller initial bundle on phones)
 const CallOverlay = lazy(() => import('../components/CallOverlay').then((m) => ({ default: m.CallOverlay })))
@@ -361,7 +363,7 @@ export default function ChatPage() {
                 <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1 max-w-xs">Select a conversation or search a username to start messaging.</p>
               </div>
             ) : (
-              <>
+              <MusicProvider conversationId={activeId}>
                 <div className="flex items-center gap-0.5 px-1 py-1 bg-[#f0f2f5] dark:bg-[#1f2c34] shrink-0">
                   <button onClick={() => setShowInfo((s) => !s)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
                     <span onClick={(e) => { e.stopPropagation(); setActiveId(null) }} className="md:hidden w-9 h-9 flex items-center justify-center text-gray-600 dark:text-zinc-300 shrink-0" aria-label="Back">
@@ -405,8 +407,14 @@ export default function ChatPage() {
                   <input className="w-full text-sm rounded-full px-3.5 py-1.5 outline-none bg-white dark:bg-[#2a3942] dark:text-zinc-100 placeholder:text-gray-400" placeholder="Search messages…" value={search} onChange={(e) => setSearch(e.target.value)} />
                 </div>
                 <MessageList messages={visibleMessages} onLoadMore={loadMore} hasMore={hasMore && !search} loadingMore={loadingMore} replyTo={replyTo} onReply={setReplyTo} wallpaper={wallpaperSrc(wallpaperId)} dark={dark} peerLastRead={peerLastRead} peerOnline={otherOnline} isDirect={activeConv?.type === 'direct'} />
+                <SharedPlayerBar />
                 <MessageComposer conversationId={activeId} replyTo={replyTo} onReply={setReplyTo} onSent={() => setRefreshKey((k) => k + 1)} />
-              </>
+                {musicMounted && (
+                  <Suspense fallback={null}>
+                    <MusicPanel open={musicOpen} onClose={() => setMusicOpen(false)} />
+                  </Suspense>
+                )}
+              </MusicProvider>
             )}
           </div>
           {showInfo && activeConv && (
@@ -444,16 +452,6 @@ export default function ChatPage() {
         onLogout={logout}
       />
       </Suspense>
-      {musicMounted && (
-        <Suspense fallback={null}>
-          <MusicPanel
-            conversationId={activeId}
-            conversationType={activeConv?.type}
-            open={musicOpen}
-            onClose={() => setMusicOpen(false)}
-          />
-        </Suspense>
-      )}
     </div>
   )
 }

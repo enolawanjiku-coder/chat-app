@@ -20,41 +20,49 @@ Always run `npm run lint` and `npm run build` before finishing a change. There i
 
 ## Database / deployment
 
-1. Apply `supabase/migrations/0014_music.sql` (after `0001`–`0013`).
+1. Apply `supabase/migrations/0014_music.sql` and `0015_music_playlist.sql` (after `0001`–`0013`).
 2. To enforce Realtime authorization: Dashboard → Project Settings → Realtime → disable **Allow public access**. Do **not** run `alter table realtime.messages enable row level security`.
 3. Env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_APP_URL` (unchanged), plus `VITE_YOUTUBE_API_KEY` to enable music search (see below). Deploy on Vercel as usual.
 
-## Media: YouTube music feature
+## Media: shared YouTube "TV" in the chat
 
-Files: `src/lib/youtube.ts` (IFrame API loader + URL/ID parsing + Data API search), `src/hooks/useYouTubePlayer.ts` (player lifecycle), `src/hooks/useGroupMusic.ts` (Realtime sync), `src/components/MusicPanel.tsx` (UI), wired into `src/pages/ChatPage.tsx`.
+A conversation-scoped shared player that works in **direct and group** chats. Anyone posting a YouTube video/playlist link produces an inline card; tapping it starts a shared session that every member can control.
 
+Files:
+- `src/lib/youtube.ts` — IFrame API loader, URL/playlist parsing (`parseYouTubeLink`, `findYouTubeLink`), Data API v3 `searchYouTube` + `fetchPlaylistItems`.
+- `src/hooks/useYouTubePlayer.ts` — single official player lifecycle.
+- `src/hooks/useSharedMusic.ts` — Realtime sync (private `music:<convId>` channel), one `sync` snapshot event, queue + history + next/prev, DB persistence.
+- `src/components/MusicProvider.tsx` — owns the one player + session; exposes `useMusic()` (state/actions) and `useMusicPlayer()` (player). Wrap the chat pane with `<MusicProvider conversationId={activeId}>`.
+- `src/components/SharedPlayerBar.tsx` — the docked player/controls (prev/next/seek/play), placed between the message list and composer.
+- `src/components/MusicPanel.tsx` — search + link + queue overlay (header Music button).
+- `src/components/MessageList.tsx` — `YouTubeCard` for links in text messages.
+
+Rules:
 - Official YouTube IFrame Player API only (`controls: 1`, branding preserved). No downloads, audio extraction, or proxying.
-- Search uses the official **YouTube Data API v3** (`search.list`, `videoEmbeddable=true`) and needs `VITE_YOUTUBE_API_KEY` (a browser key restricted by HTTP referrer). Without it, the search box shows a hint and users can still paste a link/ID. Quota is ~100 searches/day on the free tier.
-- Background audio is not supported by the IFrame API: playback pauses when the tab is backgrounded/hidden; show the poster/tap overlay and never promise background play.
+- Search/playlist loading use the official **YouTube Data API v3** and need `VITE_YOUTUBE_API_KEY` (browser key restricted by HTTP referrer). Without it, search/playlists show a hint; single-video links still play. Quota ~100 search calls/day.
+- There is one player instance per conversation pane; never unmount the host div while audio should continue (it is always mounted, just visually collapsed when idle).
+- Background audio is not supported by the IFrame API: playback pauses when the tab is backgrounded/hidden; keep the tap overlay and never promise background play.
 
 ### Manual test checklist
 
 Search
-- [ ] With `VITE_YOUTUBE_API_KEY` set, typing a song/artist and pressing Enter (or Search) shows results with thumbnails.
-- [ ] Clicking a result plays it (solo) / starts it for the group; the `+` adds it to the shared queue.
-- [ ] Without the key, the search box shows the config hint and link/ID paste still works.
-- [ ] An invalid key / disabled Data API / quota-exceeded shows a clear error, not a crash.
+- [ ] With `VITE_YOUTUBE_API_KEY` set, typing a song/artist and Enter/Search shows results with thumbnails.
+- [ ] Play starts it for everyone; `+` adds it to the shared queue.
+- [ ] Without the key, the search box shows the config hint and single-video links still play.
+- [ ] Invalid key / disabled Data API / quota-exceeded shows a clear error, not a crash.
 
-Solo
-- [ ] Paste a `watch`, `shorts`, `live`, `youtu.be`, and `music.youtube.com` link; each loads correctly.
-- [ ] Invalid/garbage link and a non-11-char ID are rejected with a clear message.
-- [ ] Play/pause, ±10s seek, and scrub bar all work and stay in sync with the video.
-- [ ] A video that disallows embedding shows an error state with a link to watch on YouTube.
-- [ ] Closing the panel while playing shows the mini bar; mini bar play/pause/stop works.
+Links / playlists in chat
+- [ ] Posting a `watch`, `shorts`, `live`, `youtu.be`, or `music.youtube.com` link shows an inline card in the bubble.
+- [ ] Tapping the card starts shared playback for both direct and group chats.
+- [ ] Posting a playlist (`list=`) link loads its items and next/prev move through them.
+- [ ] An invalid/garbage link is rejected with a clear message; a non-embeddable video shows an error with a YouTube link.
 
-Group
-- [ ] Only group conversations expose the Group tab / start session.
-- [ ] Start a track in one client; other members receive it and play in sync.
-- [ ] Play/pause/seek from any member propagate to everyone (no echo/duplicate toggles).
-- [ ] A late joiner receives the current track, position, and queue within a few seconds, even if the starter is offline (DB snapshot).
-- [ ] Queue add/remove syncs; a track ending advances to the next queued item once.
+Shared playback
+- [ ] Starting a track in one client plays in sync on the others.
+- [ ] Play/pause/seek/next/prev from any member propagate to everyone (no echo/duplicate toggles).
+- [ ] A late joiner gets the current track, position, queue and history within a few seconds, even if the starter is offline (DB snapshot).
 - [ ] Drift correction pulls a client back after it stalls (throttle the tab / pause locally).
-- [ ] End session clears playback and the row for everyone.
+- [ ] Ending the session clears playback and the row for everyone.
 
 Authorization / resilience
 - [ ] Non-members cannot read or join a conversation's `music:*` channel after public access is disabled.
@@ -62,5 +70,5 @@ Authorization / resilience
 - [ ] Autoplay-blocked clients show the "tap to enable sound" overlay and recover on tap.
 
 Mobile
-- [ ] Panel opens as a bottom sheet; controls are reachable and the video stays visible.
-- [ ] Mini bar does not cover the composer or header controls; chat remains usable while music plays.
+- [ ] The player bar stays visible and usable; controls are reachable; chat scrolls behind it.
+- [ ] Switching conversations stops the previous chat's audio.
