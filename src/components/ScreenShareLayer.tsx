@@ -5,6 +5,7 @@ import {
   Loader2,
   Maximize2,
   Minimize2,
+  Scaling,
   ScreenShare,
   Square,
   Volume2,
@@ -110,6 +111,7 @@ export function ScreenShareLayer() {
   const s = useScreenShareCtx()
   const [expanded, setExpanded] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [fill, setFill] = useState(false)
   const isSharer = s.role === 'sharer'
   const stream = isSharer ? s.localStream : s.remoteStream
 
@@ -237,13 +239,30 @@ export function ScreenShareLayer() {
       </div>
 
       {expanded && (
-        <div className="fixed inset-0 z-50 bg-black flex flex-col">
-          <div className="flex items-center justify-between px-3 py-2 text-white shrink-0">
+        <div className="fixed inset-0 z-50 bg-black">
+          {stream ? (
+            <StreamVideo stream={stream} muted={isSharer} className={`absolute inset-0 w-full h-full ${fill ? 'object-cover' : 'object-contain'}`} />
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white/70 text-sm">
+              <Loader2 className="w-7 h-7 animate-spin" />
+              {statusText(isSharer ? 'sharer' : 'viewer', s.phase, s.remoteHasAudio)}
+            </div>
+          )}
+
+          <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-2 text-white bg-gradient-to-b from-black/70 to-transparent">
             <span className="flex items-center gap-2 min-w-0">
               <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${s.phase === 'live' ? 'bg-red-500 animate-pulse' : 'bg-gray-400'}`} />
               <span className="text-sm truncate">{label}</span>
             </span>
             <div className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={() => setFill((f) => !f)}
+                aria-label={fill ? 'Fit to screen' : 'Fill screen'}
+                title={fill ? 'Fit to screen' : 'Fill screen'}
+                className={`w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center ${fill ? 'text-brand-300' : ''}`}
+              >
+                <Scaling className="w-5 h-5" />
+              </button>
               {!isSharer && (
                 <button
                   onClick={s.toggleMute}
@@ -272,17 +291,8 @@ export function ScreenShareLayer() {
               </button>
             </div>
           </div>
-          <div className="flex-1 relative min-h-0 flex items-center justify-center">
-            {stream ? (
-              <StreamVideo stream={stream} muted={isSharer} className="w-full h-full object-contain" />
-            ) : (
-              <div className="flex flex-col items-center gap-2 text-white/70 text-sm">
-                <Loader2 className="w-7 h-7 animate-spin" />
-                {statusText(isSharer ? 'sharer' : 'viewer', s.phase, s.remoteHasAudio)}
-              </div>
-            )}
-          </div>
-          <div className="flex justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shrink-0">
+
+          <div className="absolute bottom-0 inset-x-0 flex justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-black/70 to-transparent">
             <button onClick={s.stopShare} className="flex items-center gap-2 bg-red-600 text-white rounded-full px-6 py-3 font-semibold active:scale-95">
               <Square className="w-5 h-5" /> {isSharer ? 'Stop sharing' : 'Leave'}
             </button>
