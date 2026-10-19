@@ -20,9 +20,9 @@ Always run `npm run lint` and `npm run build` before finishing a change. There i
 
 ## Database / deployment
 
-1. Apply `supabase/migrations/0014_music.sql`, `0015_music_playlist.sql` and `0016_screenshare.sql` (after `0001`–`0013`).
+1. Apply `supabase/migrations/0014_music.sql`, `0015_music_playlist.sql`, `0016_screenshare.sql` and `0017_push.sql` (after `0001`–`0013`).
 2. To enforce Realtime authorization: Dashboard → Project Settings → Realtime → disable **Allow public access**. Do **not** run `alter table realtime.messages enable row level security`.
-3. Env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_APP_URL` (unchanged), plus `VITE_YOUTUBE_API_KEY` (music search) and the optional `VITE_TURN_*` (screen sharing). Deploy on Vercel as usual.
+3. Env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_APP_URL` (unchanged), plus `VITE_YOUTUBE_API_KEY` (music search), the optional `VITE_TURN_*` (screen sharing), and `VITE_VAPID_PUBLIC_KEY` (Web Push). Deploy on Vercel as usual.
 
 ## Media: shared YouTube "TV" in the chat
 
@@ -104,3 +104,28 @@ Screen sharing (two accounts, two browsers)
 - [ ] Permission denied, unsupported browser, and connection failure each show a clear message.
 - [ ] Connection/disconnection is indicated for both sides; only members of the conversation receive signaling.
 
+
+## Notifications: Web Push (background alerts)
+
+Service worker + Web Push so members get alerts even when the app is closed.
+On iPhone it only works after **Add to Home Screen** (iOS 16.4+); Android/desktop work directly.
+
+Files:
+- `public/sw.js` — push + notificationclick handlers (``/?conv=<id>`` focuses the chat).
+- `public/manifest.webmanifest` — PWA install metadata.
+- `src/lib/push.ts` — VAPID subscribe/unsubscribe, upserts `push_subscriptions` (upsert on `endpoint`).
+- `src/hooks/usePush.ts` — support detection + toggle state.
+- `src/components/SettingsDrawer.tsx` — "Background notifications" toggle.
+- `supabase/migrations/0017_push.sql` — `push_subscriptions` + RLS (own rows only).
+- `supabase/functions/send-push/index.ts` — Edge Function sender (service role; prunes 404/410 endpoints).
+
+Deployment:
+1. Apply `0017_push.sql`.
+2. Generate keys: `npx web-push generate-vapid-keys`. Put the **public** key in `VITE_VAPID_PUBLIC_KEY` (Vercel). Never commit the private key.
+3. `supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:you@example.com PUSH_WEBHOOK_SECRET=...`
+4. `supabase functions deploy send-push`
+5. Dashboard → Database → Webhooks → create on `public.messages` (INSERT) → Edge Function `send-push`; add header `x-webhook-secret: <PUSH_WEBHOOK_SECRET>`.
+
+Rules:
+- Only the service role reads all subscriptions; clients can only write their own row (RLS).
+- Web Push cannot make a browser/app "always running"; it delivers while closed. Media (calls/screen) still requires the app open.

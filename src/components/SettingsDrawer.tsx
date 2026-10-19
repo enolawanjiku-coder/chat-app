@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Ban, Bell, ExternalLink, ImageIcon, LogOut, Moon, Palette, Sun, Tv2, User, Volume2, VolumeX, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
+import { usePush } from '../hooks/usePush'
 import { WALLPAPERS } from '../lib/wallpapers'
 
 export function SettingsDrawer({
@@ -34,6 +35,7 @@ export function SettingsDrawer({
   const profile = useAuthStore((s) => s.profile)
   const [blocks, setBlocks] = useState<{ blocked_id: string; username?: string }[]>([])
   const [blockUser, setBlockUser] = useState('')
+  const push = usePush()
 
   const loadBlocks = async () => {
     if (!userId) return
@@ -128,6 +130,19 @@ export function SettingsDrawer({
             <span className="flex-1 text-sm text-gray-900 dark:text-zinc-100">Browser notifications</span>
             <span className="text-xs text-gray-400">{notifOn ? 'On' : 'Off'}</span>
           </button>
+          <button
+            onClick={() => void push.toggle()}
+            disabled={!push.supported || push.busy}
+            className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 text-left disabled:opacity-50"
+          >
+            <Bell className="w-5 h-5 text-gray-500" />
+            <span className="flex-1 text-sm text-gray-900 dark:text-zinc-100">
+              Background notifications
+              <span className="block text-[11px] text-gray-400">Get alerts even when the app is closed (iPhone: add to Home Screen first)</span>
+            </span>
+            <span className="text-xs text-gray-400">{!push.supported ? 'Unsupported' : push.enabled ? 'On' : 'Off'}</span>
+          </button>
+          {push.error && <p className="px-4 pb-1 text-[11px] text-red-600">{push.error}</p>}
 
           <p className="px-4 pt-3 pb-1 text-[11px] font-bold uppercase tracking-wide text-gray-400">Privacy</p>
           <div className="px-4 py-2">
