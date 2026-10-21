@@ -13,6 +13,8 @@ export type MusicSession = {
   participants: string[]
   error: string | null
   needsTap: boolean
+  isHost: boolean
+  canStart: boolean
   startVideo: (videoId: string, title?: string) => void
   startPlaylist: (playlistId: string, tracks: MusicTrack[], startIndex?: number) => void
   startFromLink: (link: YouTubeLink) => Promise<void>
@@ -72,7 +74,7 @@ export function MusicProvider({ conversationId, children }: { conversationId: st
     },
     onEnded: () => {
       const s = sessionRef.current
-      if (!s || !s.isController) return
+      if (!s || !s.isHost) return
       if (s.state.queue.length) s.next()
       else s.pause(0)
     },
@@ -172,6 +174,8 @@ export function MusicProvider({ conversationId, children }: { conversationId: st
       participants: session.participants,
       error: session.error,
       needsTap,
+      isHost: session.isHost,
+      canStart: session.canStart,
       startVideo: session.startVideo,
       startPlaylist: session.startPlaylist,
       startFromLink,
@@ -193,6 +197,8 @@ export function MusicProvider({ conversationId, children }: { conversationId: st
       session.participants,
       session.error,
       needsTap,
+      session.isHost,
+      session.canStart,
       session.startVideo,
       session.startPlaylist,
       startFromLink,

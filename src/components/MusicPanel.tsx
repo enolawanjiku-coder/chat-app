@@ -5,6 +5,7 @@ import { useMusic } from './MusicProvider'
 
 export function MusicPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const music = useMusic()
+  const canControl = music.canStart
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<YouTubeSearchResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -92,6 +93,11 @@ export function MusicPanel({ open, onClose }: { open: boolean; onClose: () => vo
           </button>
         </div>
 
+        {!canControl && (
+          <p className="text-[11px] text-gray-500 dark:text-zinc-400 bg-black/5 dark:bg-white/5 rounded-xl px-3 py-2">
+            The host controls this session. You can watch and listen, but only they can change the video or queue.
+          </p>
+        )}
         {!searchEnabled && (
           <p className="text-[11px] text-gray-500 dark:text-zinc-400 bg-black/5 dark:bg-white/5 rounded-xl px-3 py-2">
             Search needs a YouTube Data API key. Add <code className="font-mono">VITE_YOUTUBE_API_KEY</code> to enable it. You can still paste a link below.
@@ -113,8 +119,8 @@ export function MusicPanel({ open, onClose }: { open: boolean; onClose: () => vo
                   {r.channelTitle && <p className="text-[11px] text-gray-400 truncate">{r.channelTitle}</p>}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  <button onClick={() => music.startVideo(r.videoId, r.title)} className="text-[11px] font-semibold text-white bg-brand-500 rounded-full px-2.5 py-1">Play</button>
-                  <button onClick={() => music.addToQueue({ videoId: r.videoId, title: r.title })} aria-label="Add to shared queue" className="text-brand-600 rounded-full p-1.5 hover:bg-black/5 dark:hover:bg-white/10">
+                  <button onClick={() => music.startVideo(r.videoId, r.title)} disabled={!canControl} className="text-[11px] font-semibold text-white bg-brand-500 rounded-full px-2.5 py-1 disabled:opacity-40">Play</button>
+                  <button onClick={() => music.addToQueue({ videoId: r.videoId, title: r.title })} disabled={!canControl} aria-label="Add to shared queue" className="text-brand-600 rounded-full p-1.5 hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-40">
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
@@ -136,12 +142,12 @@ export function MusicPanel({ open, onClose }: { open: boolean; onClose: () => vo
                   if (e.key === 'Enter') void playLink()
                 }}
               />
-              <button onClick={() => void playLink()} disabled={!link.trim() || linkBusy} className="shrink-0 bg-brand-500 disabled:opacity-40 text-white rounded-full px-4 py-2 text-sm font-semibold flex items-center gap-1.5">
+              <button onClick={() => void playLink()} disabled={!link.trim() || linkBusy || !canControl} className="shrink-0 bg-brand-500 disabled:opacity-40 text-white rounded-full px-4 py-2 text-sm font-semibold flex items-center gap-1.5">
                 {linkBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 Play
               </button>
             </div>
-            <button onClick={() => { const l = findYouTubeLink(link); if (l?.videoId) music.addToQueue({ videoId: l.videoId }) }} disabled={!link.trim()} className="flex items-center gap-1 text-xs text-brand-600 disabled:opacity-40">
+            <button onClick={() => { const l = findYouTubeLink(link); if (l?.videoId) music.addToQueue({ videoId: l.videoId }) }} disabled={!link.trim() || !canControl} className="flex items-center gap-1 text-xs text-brand-600 disabled:opacity-40">
               <Plus className="w-3.5 h-3.5" /> Add link to shared queue
             </button>
             {linkError && <p className="text-xs text-red-600">{linkError}</p>}
@@ -174,13 +180,15 @@ export function MusicPanel({ open, onClose }: { open: boolean; onClose: () => vo
             <ul className="space-y-1">
               {music.state.queue.map((track) => (
                 <li key={track.videoId} className="flex items-center gap-2 text-sm">
-                  <button onClick={() => music.startVideo(track.videoId, track.title)} className="flex-1 min-w-0 text-left truncate text-gray-800 dark:text-zinc-200 hover:text-brand-600">
+                  <button onClick={() => music.startVideo(track.videoId, track.title)} disabled={!canControl} className="flex-1 min-w-0 text-left truncate text-gray-800 dark:text-zinc-200 hover:text-brand-600 disabled:opacity-60">
                     {track.title || track.videoId}
                     {track.byName ? <span className="text-gray-400 text-xs"> · {track.byName}</span> : null}
                   </button>
-                  <button onClick={() => music.removeFromQueue(track.videoId)} aria-label="Remove from queue" className="text-gray-400 hover:text-red-600">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {canControl && (
+                    <button onClick={() => music.removeFromQueue(track.videoId)} aria-label="Remove from queue" className="text-gray-400 hover:text-red-600">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -189,7 +197,7 @@ export function MusicPanel({ open, onClose }: { open: boolean; onClose: () => vo
       </div>
 
       <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-zinc-500 border-t border-black/5 dark:border-white/5 shrink-0">
-        Playback uses the official YouTube embedded player. Anyone in this chat can control it. Videos that disallow embedding won't play.
+        Playback uses the official YouTube embedded player. Only the host controls the session. Videos that disallow embedding won't play.
       </p>
     </div>
   )

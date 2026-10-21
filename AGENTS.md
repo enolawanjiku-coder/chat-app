@@ -20,7 +20,7 @@ Always run `npm run lint` and `npm run build` before finishing a change. There i
 
 ## Database / deployment
 
-1. Apply `supabase/migrations/0014_music.sql`, `0015_music_playlist.sql`, `0016_screenshare.sql` and `0017_push.sql` (after `0001`–`0013`).
+1. Apply `supabase/migrations/0014_music.sql`, `0015_music_playlist.sql`, `0016_screenshare.sql`, `0017_push.sql` and `0018_music_host.sql` (after `0001`–`0013`).
 2. To enforce Realtime authorization: Dashboard → Project Settings → Realtime → disable **Allow public access**. Do **not** run `alter table realtime.messages enable row level security`.
 3. Env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_APP_URL` (unchanged), plus `VITE_YOUTUBE_API_KEY` (music search), the optional `VITE_TURN_*` (screen sharing), and `VITE_VAPID_PUBLIC_KEY` (Web Push). Deploy on Vercel as usual.
 
@@ -41,6 +41,7 @@ Rules:
 - Official YouTube IFrame Player API only (`controls: 1`, branding preserved). No downloads, audio extraction, or proxying.
 - Search/playlist loading use the official **YouTube Data API v3** and need `VITE_YOUTUBE_API_KEY` (browser key restricted by HTTP referrer). Without it, search/playlists show a hint; single-video links still play. Quota ~100 search calls/day.
 - There is one player instance per conversation pane; never unmount the host div while audio should continue (it is always mounted, just visually collapsed when idle).
+- **Host-only control** (`0018_music_host.sql`, `music_sessions.host_id`): the member who starts the current video is the host. Only the host can play/pause/seek/next/prev/queue/end; everyone else is read-only with a "host controls" hint. `isHost` comes from `useMusic()`. When the host leaves the chat, closes the tab or switches conversation, the session ends for everyone (broadcast `end` + row delete); viewers never end it by leaving.
 - Background audio is not supported by the IFrame API: playback pauses when the tab is backgrounded/hidden; keep the tap overlay and never promise background play.
 
 ### Manual test checklist
@@ -59,9 +60,10 @@ Links / playlists in chat
 
 Shared playback
 - [ ] Starting a track in one client plays in sync on the others.
-- [ ] Play/pause/seek/next/prev from any member propagate to everyone (no echo/duplicate toggles).
-- [ ] A late joiner gets the current track, position, queue and history within a few seconds, even if the starter is offline (DB snapshot).
-- [ ] Drift correction pulls a client back after it stalls (throttle the tab / pause locally).
+- [ ] Only the host (the member who started the current video) can play/pause/seek/next/prev/queue; those actions propagate to everyone (no echo/duplicate toggles).
+- [ ] Viewers see disabled controls and a "host controls" hint; they cannot change the video or queue.
+- [ ] When the host switches conversations, navigates away, or closes the tab, the session ends for everyone (and the DB row is cleared).
+- [ ] A late joiner gets the current track, position, queue and history within a few seconds from the DB snapshot.- [ ] Drift correction pulls a client back after it stalls (throttle the tab / pause locally).
 - [ ] Ending the session clears playback and the row for everyone.
 
 Authorization / resilience

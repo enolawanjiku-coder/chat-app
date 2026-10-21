@@ -17,6 +17,7 @@ export type SharedMusicState = {
   history: MusicTrack[]
   updatedBy: string | null
   updatedByName: string | null
+  hostId: string | null
 }
 
 export type SharedMusicStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error'
@@ -32,6 +33,7 @@ const EMPTY: SharedMusicState = {
   history: [],
   updatedBy: null,
   updatedByName: null,
+  hostId: null,
 }
 
 const HEARTBEAT_MS = 10000
@@ -47,6 +49,7 @@ type MusicSessionRow = {
   queue: unknown
   history: unknown
   updated_by: string | null
+  host_id: string | null
 }
 
 type SyncPayload = {
@@ -60,6 +63,7 @@ type SyncPayload = {
   by?: unknown
   byName?: unknown
   origin?: unknown
+  hostId?: unknown
   rid?: unknown
 }
 
@@ -131,6 +135,7 @@ export function useSharedMusic(conversationId: string | null, enabled: boolean, 
         position_s: s.position,
         queue: s.queue,
         history: s.history,
+        host_id: s.hostId,
         updated_by: userIdRef.current,
         updated_at: new Date().toISOString(),
       })
@@ -146,6 +151,11 @@ export function useSharedMusic(conversationId: string | null, enabled: boolean, 
     }
     if (typeof payload.rid === 'string') respondedRidRef.current = payload.rid
     if (typeof payload.origin === 'string') controllerRef.current = payload.origin
+    const prevHost = stateRef.current.hostId
+    const hostId =
+      typeof payload.hostId === 'string'
+        ? payload.hostId
+        : prevHost ?? (typeof payload.by === 'string' ? payload.by : null)
     setState({
       videoId,
       title: typeof payload.title === 'string' ? payload.title : null,
@@ -157,6 +167,7 @@ export function useSharedMusic(conversationId: string | null, enabled: boolean, 
       history: sanitizeTracks(payload.history, MAX_HISTORY),
       updatedBy: typeof payload.by === 'string' ? payload.by : null,
       updatedByName: typeof payload.byName === 'string' ? payload.byName : null,
+      hostId,
     })
   }, [])
 
@@ -190,6 +201,7 @@ export function useSharedMusic(conversationId: string | null, enabled: boolean, 
           history: sanitizeTracks(row.history, MAX_HISTORY),
           updatedBy: row.updated_by,
           updatedByName: null,
+          hostId: row.host_id ?? row.updated_by ?? null,
         })
       }
     })()
@@ -226,6 +238,7 @@ export function useSharedMusic(conversationId: string | null, enabled: boolean, 
           by: current.updatedBy,
           byName: current.updatedByName,
           origin: originRef.current,
+          hostId: current.hostId,
           rid,
         })
       }, delay)
@@ -280,6 +293,7 @@ export function useSharedMusic(conversationId: string | null, enabled: boolean, 
         queue: current.queue,
         history: current.history,
         origin: originRef.current,
+        hostId: current.hostId,
       })
     }, HEARTBEAT_MS)
     return () => window.clearInterval(id)
@@ -300,6 +314,7 @@ export function useSharedMusic(conversationId: string | null, enabled: boolean, 
         by: userIdRef.current,
         byName: profileNameRef.current,
         origin: originRef.current,
+        hostId: next.hostId,
         ...extra,
       })
       void persist(next)
@@ -317,15 +332,21 @@ export function useSharedMusic(conversationId: string | null, enabled: boolean, 
   const startVideo = useCallback(
     (videoId: string, title?: string) => {
       if (!isValidVideoId(videoId)) return
-      emit({ ...EMPTY, videoId, title: title ?? null, isPlaying: true, position: 0, at: Date.now(), updatedBy: userIdRef.current, updatedByName: profileNameRef.current })
+      const s = stateRef.current
+      // Host-only: block take-over while the host is still in the session, but
+      // let a member recover a stale session left by a crashed host.
+      if (s.videoId && s.hostId && s.hostId !== userIdRef.current && !(status === 'connected' && !participants.includes(s.hostId))) return
+      emit({ ...EMPTY, videoId, title: title ?? null, isPlaying: true, position: 0, at: Date.now(), updatedBy: userIdRef.current, updatedByName: profileNameRef.current, hostId: userIdRef.current })
     },
-    [emit],
+    [emit, participants, status],
   )
 
   const startPlaylist = useCallback(
     (playlistId: string, tracks: MusicTrack[], startIndex = 0) => {
       const list = sanitizeTracks(tracks, MAX_QUEUE)
       if (list.length === 0) return
+      const s = stateRef.current
+      if (s.videoId && s.hostId && s.hostId !== userIdRef.current && !(status === 'connected' && !participants.includes(s.hostId))) return
       const i = Math.min(Math.max(0, startIndex), list.length - 1)
       const current = list[i]
       emit({
@@ -340,32 +361,39 @@ export function useSharedMusic(conversationId: string | null, enabled: boolean, 
         history: list.slice(0, i),
         updatedBy: userIdRef.current,
         updatedByName: profileNameRef.current,
+        hostId: userIdRef.current,
       })
     },
     [emit],
   )
 
+  // Host-only control: whoever started the session owns play/pause/seek/queue.
+  const canControl = useCallback(() => {
+    const s = stateRef.current
+    return !s.videoId || !s.hostId || s.hostId === userIdRef.current
+  }, [])
+
   const setPlaying = useCallback(
     (isPlaying: boolean, position: number) => {
       const s = stateRef.current
-      if (!s.videoId) return
+      if (!s.videoId || !canControl()) return
       emit({ ...s, isPlaying, position: Math.max(0, position), at: Date.now() })
     },
-    [emit],
+    [emit, canControl],
   )
 
   const seek = useCallback(
     (position: number) => {
       const s = stateRef.current
-      if (!s.videoId) return
+      if (!s.videoId || !canControl()) return
       emit({ ...s, position: Math.max(0, position), at: Date.now() })
     },
-    [emit],
+    [emit, canControl],
   )
 
   const next = useCallback(() => {
     const s = stateRef.current
-    if (!s.videoId) return
+    if (!s.videoId || !canControl()) return
     if (s.queue.length === 0) {
       emit({ ...s, isPlaying: false, position: 0, at: Date.now() })
       return
@@ -382,11 +410,11 @@ export function useSharedMusic(conversationId: string | null, enabled: boolean, 
       position: 0,
       at: Date.now(),
     })
-  }, [emit, currentTrack])
+  }, [emit, currentTrack, canControl])
 
   const prev = useCallback(() => {
     const s = stateRef.current
-    if (!s.videoId || s.history.length === 0) return
+    if (!s.videoId || s.history.length === 0 || !canControl()) return
     const cur = currentTrack(s)
     const back = s.history[s.history.length - 1]
     emit({
@@ -399,33 +427,35 @@ export function useSharedMusic(conversationId: string | null, enabled: boolean, 
       position: 0,
       at: Date.now(),
     })
-  }, [emit, currentTrack])
+  }, [emit, currentTrack, canControl])
 
   const addToQueue = useCallback(
     (track: MusicTrack) => {
-      if (!isValidVideoId(track.videoId)) return
+      if (!isValidVideoId(track.videoId) || !canControl()) return
       const s = stateRef.current
       if (s.queue.some((t) => t.videoId === track.videoId) || s.videoId === track.videoId) return
       const queue = [...s.queue, { ...track, by: track.by ?? userIdRef.current ?? undefined, byName: track.byName ?? profileNameRef.current ?? undefined }].slice(-MAX_QUEUE)
       emit({ ...s, queue })
     },
-    [emit],
+    [emit, canControl],
   )
 
   const removeFromQueue = useCallback(
     (videoId: string) => {
+      if (!canControl()) return
       const s = stateRef.current
       emit({ ...s, queue: s.queue.filter((t) => t.videoId !== videoId) })
     },
-    [emit],
+    [emit, canControl],
   )
 
   const endSession = useCallback(async () => {
+    if (!canControl()) return
     send('end', { by: userIdRef.current, origin: originRef.current })
     controllerRef.current = null
     setState(EMPTY)
     if (conversationId) await supabase.from('music_sessions').delete().eq('conversation_id', conversationId)
-  }, [send, conversationId])
+  }, [send, conversationId, canControl])
 
   const requestState = useCallback(() => {
     send('request', { rid: crypto.randomUUID(), by: userIdRef.current })
@@ -434,6 +464,37 @@ export function useSharedMusic(conversationId: string | null, enabled: boolean, 
   const play = useCallback((position?: number) => setPlaying(true, position ?? livePosition(stateRef.current)), [setPlaying, livePosition])
   const pause = useCallback((position?: number) => setPlaying(false, position ?? livePosition(stateRef.current)), [setPlaying, livePosition])
 
+  // When the host leaves (chat switch, navigation, tab close) the shared
+  // session ends for everyone instead of leaving a frozen player behind.
+  useEffect(() => {
+    if (!enabled || !conversationId || !userId) return
+    const endForEveryone = () => {
+      const current = stateRef.current
+      if (!current.videoId || current.hostId !== userIdRef.current) return
+      const payload = { by: userIdRef.current, origin: originRef.current }
+      const ch = channelRef.current
+      if (ch) {
+        void ch.send({ type: 'broadcast', event: 'end', payload })
+      } else {
+        const transient = supabase.channel(`music:${conversationId}`, { config: { private: true } })
+        transient.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            void transient
+              .send({ type: 'broadcast', event: 'end', payload })
+              .finally(() => window.setTimeout(() => void supabase.removeChannel(transient), 300))
+          }
+        })
+      }
+      void supabase.from('music_sessions').delete().eq('conversation_id', conversationId)
+    }
+    const onHide = () => endForEveryone()
+    window.addEventListener('pagehide', onHide)
+    return () => {
+      window.removeEventListener('pagehide', onHide)
+      endForEveryone()
+    }
+  }, [enabled, conversationId, userId])
+
   return {
     state,
     status,
@@ -441,6 +502,8 @@ export function useSharedMusic(conversationId: string | null, enabled: boolean, 
     error,
     controller: controllerRef.current,
     isController: controllerRef.current === userId,
+    isHost: !!state.videoId && (!state.hostId || state.hostId === userId),
+    canStart: !state.videoId || !state.hostId || state.hostId === userId || (status === 'connected' && !participants.includes(state.hostId)),
     startVideo,
     startPlaylist,
     play,

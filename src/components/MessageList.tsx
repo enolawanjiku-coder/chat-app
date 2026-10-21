@@ -41,6 +41,7 @@ function YouTubeCard({ link }: { link: YouTubeLink }) {
   const isActive =
     (!!link.videoId && music.state.videoId === link.videoId) ||
     (!!link.playlistId && music.state.playlistId === link.playlistId)
+  const canControl = music.canStart
 
   const start = async () => {
     if (busy) return
@@ -69,11 +70,13 @@ function YouTubeCard({ link }: { link: YouTubeLink }) {
           <p className="text-[13px] font-medium truncate text-gray-800 dark:text-zinc-200">
             {link.playlistId ? 'YouTube playlist' : 'YouTube video'}
           </p>
-          <p className="text-[11px] text-gray-400 truncate">{isActive ? 'Playing for everyone' : 'Watch together'}</p>
+          <p className="text-[11px] text-gray-400 truncate">
+            {isActive ? 'Playing for everyone' : canControl ? 'Watch together' : 'Host controls playback'}
+          </p>
         </div>
         <button
           onClick={() => void start()}
-          disabled={busy}
+          disabled={busy || !canControl}
           className="shrink-0 flex items-center gap-1 text-[12px] font-semibold text-white bg-brand-500 disabled:opacity-50 rounded-full px-3 py-1.5"
         >
           {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
