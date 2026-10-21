@@ -76,6 +76,8 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
   const mountedRef = useRef(true)
   const stopShareRef = useRef<(() => void) | null>(null)
   const reofferRef = useRef<number | null>(null)
+  const lossTimerRef = useRef<number | null>(null)
+  const everConnectedRef = useRef(false)
 
   const userRef = useRef(userId)
   userRef.current = userId
@@ -130,6 +132,10 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
       window.clearInterval(reofferRef.current)
       reofferRef.current = null
     }
+    if (lossTimerRef.current !== null) {
+      window.clearTimeout(lossTimerRef.current)
+      lossTimerRef.current = null
+    }
     const pc = pcRef.current
     if (pc) {
       pc.onicecandidate = null
@@ -149,6 +155,7 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
     pendingIceRef.current = []
     sessionRef.current = null
     pendingJoinRef.current = null
+    everConnectedRef.current = false
     if (!mountedRef.current) return
     setSessionId(null)
     setLocalStream(null)
@@ -190,23 +197,47 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
         setRemoteHasAudio(stream.getAudioTracks().length > 0)
       }
       pc.onconnectionstatechange = () => {
-        const s = pc.connectionState
-        if (s === 'connected') {
+        const state = pc.connectionState
+        if (state === 'connected') {
+          everConnectedRef.current = true
+          if (lossTimerRef.current !== null) {
+            window.clearTimeout(lossTimerRef.current)
+            lossTimerRef.current = null
+          }
           if (mountedRef.current) {
             setPhase('live')
             setError(null)
           }
-        } else if (s === 'disconnected') {
-          if (mountedRef.current) setPhase('connecting')
-        } else if (s === 'failed') {
+        } else if (state === 'disconnected' || state === 'failed') {
           if (mountedRef.current) {
-            setPhase('failed')
-            setError('Screen share connection failed. A network may be blocking peer-to-peer video.')
+            if (state === 'disconnected') setPhase('connecting')
+            else {
+              setPhase('failed')
+              setError('Screen share connection failed. A network may be blocking peer-to-peer video.')
+            }
+          }
+          // Either side closing the tab/app can leave the other waiting forever.
+          // If the peer does not come back, end the session for both.
+          if (everConnectedRef.current && lossTimerRef.current === null) {
+            lossTimerRef.current = window.setTimeout(() => {
+              lossTimerRef.current = null
+              if (sessionRef.current !== sessionId) return
+              if (pcRef.current?.connectionState === 'connected') return
+              const wasSharing = !!localRef.current
+              resetLocal()
+              if (mountedRef.current) {
+                setNotice(
+                  wasSharing
+                    ? 'The other person left the screen share.'
+                    : 'The screen share ended — the other person left or the connection was lost.',
+                )
+              }
+            }, 12000)
           }
         }
       }
     },
-    [sendSignal],
+    [resetLocal, sendSignal],
   )
 
   const onOffer = useCallback(
@@ -280,8 +311,15 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
       const p = raw as SignalPayload
       if (typeof p?.from !== 'string' || p.from !== peerRef.current) return
       if (sessionRef.current && typeof p.sessionId === 'string' && p.sessionId !== sessionRef.current) return
+      const wasSharing = !!localRef.current
       resetLocal()
-      if (mountedRef.current) setNotice('Screen sharing ended.')
+      if (mountedRef.current) {
+        setNotice(
+          wasSharing
+            ? 'The other person left the screen share.'
+            : 'The other person stopped sharing their screen.',
+        )
+      }
     },
     [resetLocal],
   )
@@ -353,14 +391,26 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
     return () => {
       channelRef.current = null
       const sid = sessionRef.current
-      const wasSharer = !!sid && !!localRef.current
-      if (sid && wasSharer) {
+      // Either role leaving (chat switch, navigation, unmount) ends the session
+      // for both sides — otherwise the other person waits on a dead stream.
+      if (sid) {
         sendTransient(conversationId, 'stop', { sessionId: sid, from: userRef.current, to: peerRef.current })
       }
       void supabase.removeChannel(channel)
       resetLocal()
     }
   }, [enabled, conversationId, userId, peerId, onOffer, onAnswer, onIce, onStop, onDecline, onJoin, resetLocal, sendTransient])
+
+  // Best-effort "I left" when the tab/app is closed or backgrounded away.
+  useEffect(() => {
+    const onHide = () => {
+      const sid = sessionRef.current
+      if (!sid || !convRef.current) return
+      sendTransient(convRef.current, 'stop', { sessionId: sid, from: userRef.current, to: peerRef.current })
+    }
+    window.addEventListener('pagehide', onHide)
+    return () => window.removeEventListener('pagehide', onHide)
+  }, [sendTransient])
 
   const startShare = useCallback(async () => {
     if (!enabledRef.current || !convRef.current || !peerRef.current || !userRef.current) {

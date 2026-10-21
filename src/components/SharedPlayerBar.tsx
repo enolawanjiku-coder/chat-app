@@ -77,14 +77,14 @@ export function SharedPlayerBar() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate text-gray-900 dark:text-zinc-100">{music.state.title || player.title || 'YouTube'}</p>
               <p className="text-[11px] text-gray-500 dark:text-zinc-400 truncate">
-                Shared playback · {music.participants.length} here
+                Shared playback · {music.participants.length} here · anyone can play/pause
                 {music.state.playlistId ? ' · playlist' : ''}
               </p>
             </div>
             <button onClick={() => setCollapsed((c) => !c)} aria-label={collapsed ? 'Expand player' : 'Minimize player'} className="w-8 h-8 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-gray-600 dark:text-zinc-300">
               {collapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
-            <button onClick={() => void music.endSession()} aria-label="End shared playback" className="w-8 h-8 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-gray-600 dark:text-zinc-300">
+            <button onClick={() => void music.endSession()} aria-label="End shared playback for everyone" title="End for everyone" className="w-8 h-8 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-gray-600 dark:text-zinc-300">
               <X className="w-4 h-4" />
             </button>
           </div>
