@@ -85,7 +85,8 @@ Files:
 - `supabase/migrations/0016_screenshare.sql` — adds `screen:` to the Realtime topic allowlist.
 
 Rules:
-- **Signaling only** goes through Supabase: private channel `screen:<conversationId>`, events `offer`/`answer`/`ice`/`stop`/`decline`. The screen video/audio is peer-to-peer (WebRTC) and is **never** stored, recorded, or relayed by Supabase.
+- **Signaling only** goes through Supabase: private channel `screen:<conversationId>`, events `offer`/`answer`/`ice`/`stop`/`decline`/`join`. The screen video/audio is peer-to-peer (WebRTC) and is **never** stored, recorded, or relayed by Supabase.
+- Invite link: starting a share posts `/ ?conv=<id>&screen=<sessionId>` in chat and offers a **Copy link / Share** action. Opening that link (or its chat card) auto-joins the live stream without an accept prompt; `join` prompts an immediate re-offer. A link only works while the sharer is still live — WebRTC has no server-side playback.
 - No Netflix OAuth/integration exists: never build a Netflix login page, and never collect/store Netflix passwords, cookies, or session tokens. The user signs in on netflix.com. This is unrelated to the app's own Supabase auth session.
 - Capture always requires the native `getDisplayMedia` picker — never capture silently.
 - Netflix/protected video may render black (DRM); tell the user and don't attempt to bypass it.

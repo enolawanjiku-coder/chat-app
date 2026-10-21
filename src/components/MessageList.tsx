@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Check, CheckCheck, ListMusic, Loader2, Lock, MonitorPlay, Pause, Phone, Play } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Message } from '../lib/types'
 import { useAuthStore } from '../store/authStore'
 import { findYouTubeLink, youTubeThumbnail, type YouTubeLink } from '../lib/youtube'
-import { buildScreenShareUrl, findScreenShareSession } from '../lib/screenShare'
+import { findScreenShareSession } from '../lib/screenShare'
 import { MessageReactions } from './MessageReactions'
 import { useMusic } from './MusicProvider'
 
 function ScreenShareCard({ conversationId, sessionId }: { conversationId: string; sessionId: string }) {
+  const navigate = useNavigate()
   return (
     <div className="my-1 rounded-xl overflow-hidden border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5">
       <div className="flex items-center gap-2 p-2">
@@ -17,15 +19,15 @@ function ScreenShareCard({ conversationId, sessionId }: { conversationId: string
         </span>
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-medium text-gray-800 dark:text-zinc-200">Live screen share</p>
-          <p className="text-[11px] text-gray-400 truncate">Open this chat to receive the invite</p>
+          <p className="text-[11px] text-gray-400 truncate">Tap to join — no need to accept</p>
         </div>
-        <a
-          href={buildScreenShareUrl(conversationId, sessionId)}
+        <button
+          onClick={() => navigate(`/?conv=${conversationId}&screen=${sessionId}`)}
           className="shrink-0 flex items-center gap-1 text-[12px] font-semibold text-white bg-brand-500 rounded-full px-3 py-1.5"
         >
           <MonitorPlay className="w-3.5 h-3.5" />
           Join
-        </a>
+        </button>
       </div>
     </div>
   )

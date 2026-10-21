@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   AlertCircle,
+  Check,
+  Copy,
   Info,
   Loader2,
   Maximize2,
   Minimize2,
   Scaling,
   ScreenShare,
+  Share2,
   Square,
   Volume2,
   VolumeX,
   X,
 } from 'lucide-react'
+import { buildScreenShareUrl } from '../lib/screenShare'
 import { useScreenShareCtx } from './ScreenShareProvider'
 
 function StreamVideo({
@@ -112,8 +117,61 @@ export function ScreenShareLayer() {
   const [expanded, setExpanded] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fill, setFill] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [joinNotice, setJoinNotice] = useState<string | null>(null)
+  const triedRef = useRef<string | null>(null)
+  const [params] = useSearchParams()
+  const screenParam = params.get('screen')
   const isSharer = s.role === 'sharer'
   const stream = isSharer ? s.localStream : s.remoteStream
+  const inviteUrl = s.conversationId && s.sessionId ? buildScreenShareUrl(s.conversationId, s.sessionId) : null
+
+  // Opening a share link auto-requests the stream — no second "accept" step.
+  const canShare = s.canShare
+  const joinSession = s.joinSession
+  useEffect(() => {
+    if (!screenParam || !canShare) return
+    if (triedRef.current === screenParam) return
+    triedRef.current = screenParam
+    joinSession(screenParam)
+  }, [screenParam, canShare, joinSession])
+
+  // If the sharer has already stopped, the link has nothing to connect to.
+  useEffect(() => {
+    if (!screenParam || s.role || s.incoming) {
+      setJoinNotice(null)
+      return
+    }
+    const timer = window.setTimeout(
+      () => setJoinNotice('This screen share isn’t live right now — ask them to start again.'),
+      9000,
+    )
+    return () => window.clearTimeout(timer)
+  }, [screenParam, s.role, s.incoming])
+
+  const copyLink = async () => {
+    if (!inviteUrl) return
+    try {
+      await navigator.clipboard.writeText(inviteUrl)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1800)
+    } catch {
+      setJoinNotice(inviteUrl)
+    }
+  }
+
+  const shareLink = async () => {
+    if (!inviteUrl) return
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Join my screen share', url: inviteUrl })
+        return
+      } catch {
+        /* user cancelled — fall through to copy */
+      }
+    }
+    await copyLink()
+  }
 
   useEffect(() => {
     const onChange = () => setIsFullscreen(!!document.fullscreenElement)
@@ -130,7 +188,8 @@ export function ScreenShareLayer() {
   }, [s.role])
 
   // ── Incoming share request (viewer hasn't accepted yet) ───────────────────
-  if (s.incoming && !s.role) {
+  // A matching invite link auto-joins, so skip the prompt in that case.
+  if (s.incoming && !s.role && s.incoming.sessionId !== screenParam) {
     return (
       <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6">
         <div className="bg-white dark:bg-zinc-800 rounded-3xl p-6 w-full max-w-xs text-center space-y-4 shadow-2xl">
@@ -165,13 +224,17 @@ export function ScreenShareLayer() {
 
   // ── Idle error/notice toast (e.g. permission denied while starting) ───────
   if (!s.role) {
-    const message = s.error ?? s.notice
+    const message = s.error ?? s.notice ?? joinNotice
     if (!message) return null
     return (
       <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 max-w-[90vw] bg-gray-900 text-white text-sm rounded-2xl px-4 py-2 shadow-lg flex items-center gap-2">
         {s.error ? <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" /> : <Info className="w-4 h-4 text-sky-400 shrink-0" />}
         <span className="min-w-0">{message}</span>
-        <button onClick={s.clearError} aria-label="Dismiss" className="ml-1 opacity-70 hover:opacity-100 shrink-0">
+        <button
+          onClick={() => { s.clearError(); setJoinNotice(null) }}
+          aria-label="Dismiss"
+          className="ml-1 opacity-70 hover:opacity-100 shrink-0"
+        >
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -215,6 +278,16 @@ export function ScreenShareLayer() {
               className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 ${s.muted ? 'text-red-600' : 'text-gray-600 dark:text-zinc-300'} ${s.remoteHasAudio ? '' : 'opacity-40'}`}
             >
               {s.muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+            </button>
+          )}
+          {isSharer && inviteUrl && (
+            <button
+              onClick={() => void shareLink()}
+              aria-label="Share screen link"
+              title="Send this link so they can join"
+              className="w-9 h-9 shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center text-gray-600 dark:text-zinc-300"
+            >
+              {copied ? <Check className="w-5 h-5 text-green-600" /> : <Share2 className="w-5 h-5" />}
             </button>
           )}
           <button
@@ -292,7 +365,16 @@ export function ScreenShareLayer() {
             </div>
           </div>
 
-          <div className="absolute bottom-0 inset-x-0 flex justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-black/70 to-transparent">
+          <div className="absolute bottom-0 inset-x-0 flex items-center justify-center gap-3 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-black/70 to-transparent">
+            {isSharer && inviteUrl && (
+              <button
+                onClick={() => void shareLink()}
+                className="flex items-center gap-2 bg-white/15 backdrop-blur text-white rounded-full px-5 py-3 font-semibold active:scale-95"
+              >
+                {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                {copied ? 'Copied' : 'Copy link'}
+              </button>
+            )}
             <button onClick={s.stopShare} className="flex items-center gap-2 bg-red-600 text-white rounded-full px-6 py-3 font-semibold active:scale-95">
               <Square className="w-5 h-5" /> {isSharer ? 'Stop sharing' : 'Leave'}
             </button>

@@ -62,10 +62,12 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
   const [incoming, setIncoming] = useState<IncomingShare | null>(null)
   const [muted, setMuted] = useState(false)
   const [signalStatus, setSignalStatus] = useState<'connecting' | 'ready' | 'error'>('connecting')
+  const [sessionId, setSessionId] = useState<string | null>(null)
 
   const channelRef = useRef<RealtimeChannel | null>(null)
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const sessionRef = useRef<string | null>(null)
+  const pendingJoinRef = useRef<string | null>(null)
   const localRef = useRef<MediaStream | null>(null)
   const remoteRef = useRef<MediaStream | null>(null)
   const pendingIceRef = useRef<RTCIceCandidateInit[]>([])
@@ -146,7 +148,9 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
     remoteRef.current = null
     pendingIceRef.current = []
     sessionRef.current = null
+    pendingJoinRef.current = null
     if (!mountedRef.current) return
+    setSessionId(null)
     setLocalStream(null)
     setRemoteStream(null)
     setRemoteHasAudio(false)
@@ -293,6 +297,35 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
     [resetLocal],
   )
 
+  // A late joiner asks to be let in; the sharer re-offers immediately instead
+  // of waiting for the next keep-alive tick.
+  const onJoin = useCallback(
+    (raw: unknown) => {
+      const p = raw as SignalPayload
+      if (typeof p?.sessionId !== 'string' || typeof p.from !== 'string') return
+      if (p.from !== peerRef.current || p.from === userRef.current) return
+      if (sessionRef.current !== p.sessionId || !localRef.current) return
+      const pc = pcRef.current
+      if (!pc) return
+      void (async () => {
+        try {
+          const offer = await pc.createOffer()
+          await pc.setLocalDescription(offer)
+          sendSignal('offer', {
+            sessionId: p.sessionId,
+            from: userRef.current,
+            fromName: nameRef.current,
+            to: peerRef.current,
+            sdp: offer,
+          })
+        } catch {
+          /* the keep-alive interval will retry */
+        }
+      })()
+    },
+    [sendSignal],
+  )
+
   useEffect(() => {
     if (!enabled || !conversationId || !userId || !peerId) {
       if (sessionRef.current) resetLocal()
@@ -310,6 +343,7 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
     bind('ice', onIce)
     bind('stop', onStop)
     bind('decline', onDecline)
+    bind('join', onJoin)
     channel.subscribe((status) => {
       if (!mountedRef.current) return
       if (status === 'SUBSCRIBED') setSignalStatus('ready')
@@ -326,7 +360,7 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
       void supabase.removeChannel(channel)
       resetLocal()
     }
-  }, [enabled, conversationId, userId, peerId, onOffer, onAnswer, onIce, onStop, onDecline, resetLocal, sendTransient])
+  }, [enabled, conversationId, userId, peerId, onOffer, onAnswer, onIce, onStop, onDecline, onJoin, resetLocal, sendTransient])
 
   const startShare = useCallback(async () => {
     if (!enabledRef.current || !convRef.current || !peerRef.current || !userRef.current) {
@@ -382,6 +416,7 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
     pcRef.current = pc
     const sessionId = crypto.randomUUID()
     sessionRef.current = sessionId
+    setSessionId(sessionId)
     localRef.current = stream
     setLocalStream(stream)
     setRemoteStream(null)
@@ -468,6 +503,7 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
     const pc = new RTCPeerConnection({ iceServers: buildIceServers() })
     pcRef.current = pc
     sessionRef.current = inc.sessionId
+    setSessionId(inc.sessionId)
     setRole('viewer')
     setIncoming(null)
     wirePc(pc, inc.sessionId)
@@ -491,6 +527,25 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
       setPhase('idle')
     }
   }, [sendSignal])
+
+  // When the user arrives through an invite link (?screen=<id>), accept the
+  // matching offer automatically — they already chose to join, so there is no
+  // second "accept" prompt.
+  useEffect(() => {
+    const pending = pendingJoinRef.current
+    if (!pending || !incoming || incoming.sessionId !== pending) return
+    pendingJoinRef.current = null
+    void accept()
+  }, [incoming, accept])
+
+  const joinSession = useCallback(
+    (targetSessionId: string) => {
+      if (sessionRef.current) return
+      pendingJoinRef.current = targetSessionId
+      sendSignal('join', { sessionId: targetSessionId, from: userRef.current, to: peerRef.current })
+    },
+    [sendSignal],
+  )
 
   const toggleMute = useCallback(() => {
     const stream = remoteRef.current
@@ -522,10 +577,12 @@ export function useScreenShare(conversationId: string | null, peerId: string | n
     incoming,
     muted,
     signalStatus,
+    sessionId,
     startShare,
     stopShare,
     accept,
     decline,
+    joinSession,
     toggleMute,
     clearError,
   }
